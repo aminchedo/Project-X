@@ -1,0 +1,56 @@
+[
+  {
+    "id": "day-trading-aggressive",
+    "name": "معاملات روزانه تهاجمی",
+    "symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT"],
+    "timeframes": ["15m", "1h", "4h"],
+    "isFavorite": true,
+    "createdAt": "2025-10-05T00:00:00.000Z",
+    "description": "برای معامله‌گران روزانه با ریسک‌پذیری بالا"
+  },
+  {
+    "id": "swing-conservative",
+    "name": "نوسان‌گیری محافظه‌کارانه",
+    "symbols": ["BTCUSDT", "ETHUSDT", "ADAUSDT", "DOTUSDT", "LINKUSDT"],
+    "timeframes": ["4h", "1d", "1w"],
+    "isFavorite": true,
+    "createdAt": "2025-10-05T00:00:00.000Z",
+    "description": "برای معاملات نوسانی چند روزه با ریسک کم"
+  },
+  {
+    "id": "scalping-fast",
+    "name": "اسکالپینگ سریع",
+    "symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT"],
+    "timeframes": ["1m", "5m", "15m"],
+    "isFavorite": false,
+    "createdAt": "2025-10-05T00:00:00.000Z",
+    "description": "برای اسکالپرها - معاملات خیلی سریع"
+  },
+  {
+    "id": "defi-hunter",
+    "name": "شکارچی دیفای",
+    "symbols": ["UNIUSDT", "AAVEUSDT", "LINKUSDT", "MKRUSDT", "CRVUSDT", "SUSHIUSDT"],
+    "timeframes": ["1h", "4h", "1d"],
+    "isFavorite": false,
+    "createdAt": "2025-10-05T00:00:00.000Z",
+    "description": "فقط پروژه‌های دیفای"
+  },
+  {
+    "id": "top-10-weekly",
+    "name": "ده برتر هفتگی",
+    "symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT", "TRXUSDT", "MATICUSDT", "LTCUSDT"],
+    "timeframes": ["1d", "1w"],
+    "isFavorite": true,
+    "createdAt": "2025-10-05T00:00:00.000Z",
+    "description": "10 ارز برتر بازار برای تحلیل هفتگی"
+  },
+  {
+    "id": "altcoin-momentum",
+    "name": "مومنتوم آلتکوین",
+    "symbols": ["AVAXUSDT", "NEARUSDT", "FTMUSDT", "ATOMUSDT", "ALGOUSDT", "ICPUSDT"],
+    "timeframes": ["15m", "1h", "4h"],
+    "isFavorite": false,
+    "createdAt": "2025-10-05T00:00:00.000Z",
+    "description": "آلتکوین‌های با حجم بالا"
+  }
+]

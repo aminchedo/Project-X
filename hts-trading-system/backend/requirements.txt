@@ -1,0 +1,51 @@
+# HTS Trading System Backend Dependencies
+
+# Core FastAPI and Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+websockets==12.0
+python-multipart==0.0.6
+
+# Database and Caching
+sqlalchemy==2.0.23
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+redis==5.0.1
+alembic==1.12.1
+
+# HTTP Client and API Integration
+aiohttp==3.9.1
+httpx==0.25.2
+requests==2.31.0
+
+# Data Processing and Analysis
+pandas==2.1.4
+numpy==1.25.2
+ta-lib==0.4.28
+ccxt==4.1.74
+
+# Machine Learning and Statistics
+scikit-learn==1.3.2
+scipy==1.11.4
+
+# Telegram Bot
+python-telegram-bot==20.7
+
+# Utilities and Validation
+pydantic==2.5.2
+python-dotenv==1.0.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Logging and Monitoring
+structlog==23.2.0
+
+# Task Queue (Optional)
+celery==5.3.4
+
+# Development and Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.11.0
+flake8==6.1.0
+mypy==1.7.1

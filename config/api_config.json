@@ -1,0 +1,159 @@
+{
+  "block_explorers": {
+    "tronscan": {
+      "baseUrl": "https://api.tronscan.org/api",
+      "envKey": "TRONSCAN_KEY"
+    },
+    "bscscan": {
+      "baseUrl": "https://api.bscscan.com/api",
+      "envKey": "BSCSCAN_KEY"
+    },
+    "etherscan": {
+      "baseUrl": "https://api.etherscan.io/api",
+      "envKey": "ETHERSCAN_KEY",
+      "backupEnvKey": "ETHERSCAN_KEY_2"
+    },
+    "infura": {
+      "baseUrl": "https://mainnet.infura.io/v3",
+      "envKey": "INFURA_PROJECT_ID"
+    },
+    "alchemy": {
+      "baseUrl": "https://eth-mainnet.alchemyapi.io/v2",
+      "envKey": "ALCHEMY_KEY"
+    },
+    "covalent": {
+      "baseUrl": "https://api.covalenthq.com/v1/1",
+      "envKey": "COVALENT_KEY"
+    }
+  },
+  "market_data": {
+    "coinmarketcap": {
+      "baseUrl": "https://pro-api.coinmarketcap.com/v1",
+      "envKey": "COINMARKETCAP_KEY"
+    },
+    "cryptocompare": {
+      "baseUrl": "https://min-api.cryptocompare.com/data",
+      "envKey": "CRYPTOCOMPARE_KEY"
+    },
+    "coingecko": {
+      "baseUrl": "https://api.coingecko.com/api/v3",
+      "envKey": ""
+    },
+    "nomics": {
+      "baseUrl": "https://api.nomics.com/v1",
+      "envKey": "NOMICS_KEY"
+    },
+    "messari": {
+      "baseUrl": "https://data.messari.io/api/v1",
+      "envKey": "MESSARI_KEY"
+    },
+    "bravenewcoin": {
+      "baseUrl": "https://bravenewcoin.p.rapidapi.com",
+      "envKey": "BRAVENEWCOIN_KEY"
+    },
+    "kaiko": {
+      "baseUrl": "https://us.market-api.kaiko.io/v2",
+      "envKey": "KAIKO_KEY"
+    },
+    "coinapi": {
+      "baseUrl": "https://rest.coinapi.io/v1",
+      "envKey": "COINAPI_KEY"
+    }
+  },
+  "news": {
+    "newsapi": {
+      "baseUrl": "https://newsapi.org/v2",
+      "envKey": "NEWSAPI_KEY"
+    },
+    "cryptopanic": {
+      "baseUrl": "https://cryptopanic.com/api/v1",
+      "envKey": "CRYPTOPANIC_KEY"
+    },
+    "cryptocontrol": {
+      "baseUrl": "https://cryptocontrol.io/api/v1/public",
+      "envKey": "CRYPTOCONTROL_KEY"
+    },
+    "coindesk": {
+      "baseUrl": "https://api.coindesk.com/v2",
+      "envKey": "COINDESK_KEY"
+    },
+    "cointelegraph": {
+      "baseUrl": "https://api.cointelegraph.com",
+      "envKey": "COINTELEGRAPH_KEY"
+    },
+    "cryptoslate": {
+      "baseUrl": "https://api.cryptoslate.com",
+      "envKey": "CRYPTOSLATE_KEY"
+    },
+    "theblock": {
+      "baseUrl": "https://api.theblock.co/v1",
+      "envKey": "THEBLOCK_KEY"
+    }
+  },
+  "sentiment": {
+    "alternative_me": {
+      "baseUrl": "https://api.alternative.me/fng",
+      "envKey": "ALTERNATIVE_ME_KEY"
+    },
+    "santiment": {
+      "baseUrl": "https://api.santiment.net/graphql",
+      "envKey": "SANTIMENT_KEY"
+    },
+    "lunarcrush": {
+      "baseUrl": "https://api.lunarcrush.com/v2",
+      "envKey": "LUNARCRUSH_KEY"
+    },
+    "thetie": {
+      "baseUrl": "https://api.thetie.io",
+      "envKey": "THETIE_KEY"
+    },
+    "cryptoquant": {
+      "baseUrl": "https://api.cryptoquant.com/v1",
+      "envKey": "CRYPTOQUANT_KEY"
+    },
+    "glassnode_social": {
+      "baseUrl": "https://api.glassnode.com/v1",
+      "envKey": "GLASSNODE_KEY"
+    },
+    "coingecko_community": {
+      "baseUrl": "https://api.coingecko.com/api/v3",
+      "envKey": ""
+    },
+    "messari_social": {
+      "baseUrl": "https://data.messari.io/api/v1",
+      "envKey": "MESSARI_KEY"
+    },
+    "reddit": {
+      "baseUrl": "https://www.reddit.com",
+      "envKey": ""
+    }
+  },
+  "onchain": {
+    "glassnode": {
+      "baseUrl": "https://api.glassnode.com/v1",
+      "envKey": "GLASSNODE_KEY"
+    },
+    "intotheblock": {
+      "baseUrl": "https://api.intotheblock.com/v1",
+      "envKey": "INTOTHEBLOCK_KEY"
+    },
+    "nansen": {
+      "baseUrl": "https://api.nansen.ai/v1",
+      "envKey": "NANSEN_KEY"
+    },
+    "thegraph": {
+      "baseUrl": "https://api.thegraph.com/subgraphs/name",
+      "envKey": ""
+    }
+  },
+  "whales": {
+    "whalealert": {
+      "baseUrl": "https://api.whale-alert.io/v1",
+      "envKey": "WHALEALERT_KEY"
+    },
+    "arkham": {
+      "baseUrl": "https://api.arkham.com",
+      "envKey": "ARKHAM_KEY"
+    }
+  }
+}

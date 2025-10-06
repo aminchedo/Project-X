@@ -1,0 +1,1 @@
+# Schema validation module for HTS Trading System

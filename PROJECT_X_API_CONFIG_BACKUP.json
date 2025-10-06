@@ -1,0 +1,305 @@
+{
+  "api_config": {
+    "description": "Complete API configuration for Project X - HTS Trading System",
+    "version": "1.0.0",
+    "last_updated": "2025-01-06",
+    "services": {
+      "block_explorers": {
+        "count": 11,
+        "services": {
+          "tronscan": {
+            "primary": {
+              "name": "tronscan",
+              "baseUrl": "https://api.tronscan.org/api",
+              "key": "7ae72726-bffe-4e74-9c33-97b761eeea21"
+            },
+            "fallbacks": [
+              {
+                "name": "tronGrid",
+                "baseUrl": "https://api.trongrid.io",
+                "key": ""
+              },
+              {
+                "name": "blockchair",
+                "baseUrl": "https://api.blockchair.com/tron",
+                "key": ""
+              }
+            ]
+          },
+          "bscscan": {
+            "primary": {
+              "name": "bscscan",
+              "baseUrl": "https://api.bscscan.com/api",
+              "key": "K62RKHGXTDCG53RU4MCG6XABIMJKTN19IT"
+            },
+            "fallbacks": [
+              {
+                "name": "ankr",
+                "baseUrl": "https://api.ankr.com/scan/bsc",
+                "key": ""
+              },
+              {
+                "name": "binTools",
+                "baseUrl": "https://api.bintools.io/bsc",
+                "key": ""
+              }
+            ]
+          },
+          "etherscan": {
+            "primary": {
+              "name": "etherscan",
+              "baseUrl": "https://api.etherscan.io/api",
+              "key": "SZHYFZK2RR8H9TIMJBVW54V4H81K2Z2KR2"
+            },
+            "fallbacks": [
+              {
+                "name": "etherscan_2",
+                "baseUrl": "https://api.etherscan.io/api",
+                "key": "T6IR8VJHX2NE6ZJW2S3FDVN1TYG4PYYI45"
+              },
+              {
+                "name": "infura",
+                "baseUrl": "https://mainnet.infura.io/v3",
+                "key": ""
+              },
+              {
+                "name": "alchemy",
+                "baseUrl": "https://eth-mainnet.alchemyapi.io/v2",
+                "key": ""
+              },
+              {
+                "name": "covalent",
+                "baseUrl": "https://api.covalenthq.com/v1/1",
+                "key": ""
+              }
+            ]
+          }
+        }
+      },
+      "market_data": {
+        "count": 9,
+        "services": {
+          "coinmarketcap": {
+            "primary": {
+              "name": "coinmarketcap",
+              "baseUrl": "https://pro-api.coinmarketcap.com/v1",
+              "key": "b54bcf4d-1bca-4e8e-9a24-22ff2c3d462c"
+            },
+            "fallbacks": [
+              {
+                "name": "coinmarketcapAlt",
+                "baseUrl": "https://pro-api.coinmarketcap.com/v1",
+                "key": "04cf4b5b-9868-465c-8ba0-9f2e78c92eb1"
+              },
+              {
+                "name": "coingecko",
+                "baseUrl": "https://api.coingecko.com/api/v3",
+                "key": ""
+              },
+              {
+                "name": "nomics",
+                "baseUrl": "https://api.nomics.com/v1",
+                "key": ""
+              },
+              {
+                "name": "messari",
+                "baseUrl": "https://data.messari.io/api/v1",
+                "key": ""
+              },
+              {
+                "name": "braveNewCoin",
+                "baseUrl": "https://bravenewcoin.p.rapidapi.com",
+                "key": ""
+              }
+            ]
+          },
+          "cryptocompare": {
+            "primary": {
+              "name": "cryptocompare",
+              "baseUrl": "https://min-api.cryptocompare.com/data",
+              "key": "e79c8e6d4c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f"
+            },
+            "fallbacks": [
+              {
+                "name": "kaiko",
+                "baseUrl": "https://us.market-api.kaiko.io/v2",
+                "key": ""
+              },
+              {
+                "name": "coinapi",
+                "baseUrl": "https://rest.coinapi.io/v1",
+                "key": ""
+              }
+            ]
+          }
+        }
+      },
+      "news_aggregators": {
+        "count": 7,
+        "services": {
+          "newsapi": {
+            "primary": {
+              "name": "newsapi",
+              "baseUrl": "https://newsapi.org/v2",
+              "key": "pub_346789abc123def456789ghi012345jkl"
+            },
+            "fallbacks": [
+              {
+                "name": "cryptoPanic",
+                "baseUrl": "https://cryptopanic.com/api/v1",
+                "key": ""
+              },
+              {
+                "name": "cryptoControl",
+                "baseUrl": "https://cryptocontrol.io/api/v1/public",
+                "key": ""
+              },
+              {
+                "name": "coinDesk",
+                "baseUrl": "https://api.coindesk.com/v2",
+                "key": ""
+              },
+              {
+                "name": "coinTelegraph",
+                "baseUrl": "https://api.cointelegraph.com",
+                "key": ""
+              },
+              {
+                "name": "cryptoSlate",
+                "baseUrl": "https://api.cryptoslate.com",
+                "key": ""
+              },
+              {
+                "name": "theBlock",
+                "baseUrl": "https://api.theblock.co/v1",
+                "key": ""
+              }
+            ]
+          }
+        }
+      },
+      "sentiment_mood": {
+        "count": 8,
+        "services": {
+          "sentiment": {
+            "primary": {
+              "name": "alternativeMe",
+              "baseUrl": "https://api.alternative.me/fng",
+              "key": ""
+            },
+            "fallbacks": [
+              {
+                "name": "santiment",
+                "baseUrl": "https://api.santiment.net/graphql",
+                "key": "YOUR_SANTIMENT_KEY"
+              },
+              {
+                "name": "lunarCrush",
+                "baseUrl": "https://api.lunarcrush.com/v2",
+                "key": "YOUR_LUNARCRUSH_KEY"
+              },
+              {
+                "name": "theTie",
+                "baseUrl": "https://api.thetie.io",
+                "key": "YOUR_THETIE_KEY"
+              },
+              {
+                "name": "cryptoQuant",
+                "baseUrl": "https://api.cryptoquant.com/v1",
+                "key": "YOUR_CRYPTOQUANT_KEY"
+              },
+              {
+                "name": "glassnodeSocial",
+                "baseUrl": "https://api.glassnode.com/v1",
+                "key": "YOUR_GLASSNODE_KEY"
+              },
+              {
+                "name": "coingeckoComm",
+                "baseUrl": "https://api.coingecko.com/api/v3",
+                "key": ""
+              },
+              {
+                "name": "messariSocial",
+                "baseUrl": "https://data.messari.io/api/v1",
+                "key": ""
+              },
+              {
+                "name": "reddit",
+                "baseUrl": "https://www.reddit.com",
+                "key": ""
+              }
+            ]
+          }
+        }
+      },
+      "on_chain_analytics": {
+        "count": 4,
+        "services": {
+          "glassnode": {
+            "primary": {
+              "name": "glassnode",
+              "baseUrl": "https://api.glassnode.com/v1",
+              "key": ""
+            }
+          },
+          "intoTheBlock": {
+            "primary": {
+              "name": "intoTheBlock",
+              "baseUrl": "https://api.intotheblock.com/v1",
+              "key": ""
+            }
+          },
+          "nansen": {
+            "primary": {
+              "name": "nansen",
+              "baseUrl": "https://api.nansen.ai/v1",
+              "key": ""
+            }
+          },
+          "theGraph": {
+            "primary": {
+              "name": "theGraph",
+              "baseUrl": "https://api.thegraph.com/subgraphs/name",
+              "key": ""
+            }
+          }
+        }
+      },
+      "whale_tracking": {
+        "count": 2,
+        "services": {
+          "whaleAlert": {
+            "primary": {
+              "name": "whaleAlert",
+              "baseUrl": "https://api.whale-alert.io/v1",
+              "key": "YOUR_WHALEALERT_KEY"
+            },
+            "fallbacks": [
+              {
+                "name": "arkham",
+                "baseUrl": "https://api.arkham.com",
+                "key": "YOUR_ARKHAM_KEY"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "total_services": 38,
+    "features": {
+      "fallback_system": true,
+      "rate_limiting": true,
+      "caching": true,
+      "error_handling": true,
+      "real_time_updates": true,
+      "data_persistence": true
+    },
+    "update_intervals": {
+      "market_data": "30 seconds",
+      "whale_transactions": "2 minutes",
+      "news_updates": "5 minutes",
+      "sentiment_data": "10 minutes",
+      "portfolio_data": "1 minute"
+    }
+  }
+}
