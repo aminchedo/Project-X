@@ -47,6 +47,9 @@ from scoring.api import router as scoring_router
 # Import crypto data aggregation router
 from routers.data import router as data_router
 
+# Import AI extras router (goal conditioning + calibration)
+from routers.ai_extras import router as extras_router
+
 # Import database components
 from database.connection import get_db, init_db
 from database.models import TradingSession, SignalRecord, TradeRecord, SystemMetrics, RiskLimit
@@ -125,6 +128,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(extras_router)
 # Include routers
 app.include_router(scoring_router)
 app.include_router(data_router)

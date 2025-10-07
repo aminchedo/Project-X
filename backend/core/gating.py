@@ -5,6 +5,7 @@ Integrates RSI/MACD alignment, SMC quality checks, and sentiment filters
 
 from typing import Dict, Optional
 import structlog
+from backend.core.goal_conditioning import resolve_goal, adjust_thresholds
 
 logger = structlog.get_logger()
 
@@ -126,7 +127,8 @@ def final_gate(
     direction: str,
     entry_score: float,
     conf_score: float,
-    thresholds: Dict[str, float]
+    thresholds: Dict[str, float],
+    user_goal: Optional[str] = None
 ) -> Dict[str, bool]:
     """
     Apply all gates and return detailed results
@@ -140,6 +142,7 @@ def final_gate(
         entry_score: Weighted entry score
         conf_score: Confluence score
         thresholds: All thresholds dict
+        user_goal: Optional goal ("auto", "continuation", "reversal")
     
     Returns:
         Dictionary with gate results:
@@ -152,15 +155,24 @@ def final_gate(
             "final": bool  # All gates passed
         }
     """
+    # Apply goal-conditioning to thresholds if goal provided
+    eff_thresholds = thresholds
+    if user_goal:
+        goal = resolve_goal(user_goal, smc.get("HTF_TREND", 0))
+        from backend.core.goal_conditioning import apply_goal
+        _, th_adj, _ = apply_goal(goal)
+        eff_thresholds = adjust_thresholds(thresholds, th_adj)
+        logger.debug("Goal-conditioned thresholds applied", goal=goal, adjustments=th_adj)
+    
     # Apply individual gates
     gate_rsi_macd = gate_alignment_rsi_macd(rsi, macd_hist, direction)
     gate_sent = gate_sentiment(sentiment, direction)
-    gate_smc_quality = smc_gate(smc, thresholds)
+    gate_smc_quality = smc_gate(smc, eff_thresholds)
     gate_conf = gate_confluence(
         entry_score,
         conf_score,
-        thresholds.get("EntryScore", 0.65),
-        thresholds.get("ConfluenceScore", 0.55)
+        eff_thresholds.get("EntryScore", 0.65),
+        eff_thresholds.get("ConfluenceScore", 0.55)
     )
     
     # Liquidity gate: require liquidity nearby

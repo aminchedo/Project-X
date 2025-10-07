@@ -6,6 +6,8 @@ Combines traditional indicators with Smart Money Concepts
 from typing import Dict, List, Optional
 import structlog
 from backend.core.dynamic_weights import adjust_weights
+from backend.core.calibration import load_platt, platt_apply
+from backend.core.goal_conditioning import resolve_goal, apply_goal
 
 logger = structlog.get_logger()
 
@@ -69,11 +71,41 @@ def normalize_signals(signals: Dict[str, float]) -> Dict[str, float]:
     return normalized
 
 
+def apply_goal_to_weights(
+    weights: Dict[str, float],
+    user_goal: Optional[str],
+    htf_trend: float = 0.0
+) -> Dict[str, float]:
+    """
+    Apply goal-conditioning to weights
+    
+    Args:
+        weights: Base signal weights
+        user_goal: User goal ("auto", "continuation", "reversal", or None)
+        htf_trend: HTF trend value (-1, 0, or 1)
+    
+    Returns:
+        Goal-conditioned weights
+    """
+    if not user_goal:
+        return weights
+    
+    goal = resolve_goal(user_goal, htf_trend)
+    wmul, _, _ = apply_goal(goal)
+    
+    # Apply multipliers to weights
+    eff_weights = {k: weights.get(k, 0.0) * wmul.get(k, 1.0) for k in weights}
+    
+    logger.debug("Goal-conditioned weights applied", goal=goal, multipliers=wmul)
+    return eff_weights
+
+
 def compute_entry_score(
     signals: Dict[str, float],
     weights: Dict[str, float],
     smc_features: Optional[Dict[str, float]] = None,
-    context: Optional[Dict] = None
+    context: Optional[Dict] = None,
+    user_goal: Optional[str] = None
 ) -> float:
     """
     Compute entry score including SMC features and dynamic weights
@@ -85,6 +117,7 @@ def compute_entry_score(
             Expected keys: HTF_TREND, FVG_ATR, SMC_ZQS, LIQ_NEAR
         context: Market context for dynamic weight adjustment
             Expected keys: atr_pct, spread_bp, htf_trend, realized_vol, news_high_impact
+        user_goal: Optional goal for goal-conditioning ("auto", "continuation", "reversal")
     
     Returns:
         Entry score (0..1)
@@ -98,21 +131,35 @@ def compute_entry_score(
         combined_signals["FVG_ATR"] = smc_features.get("FVG_ATR", 0.0)
         combined_signals["LIQ_GRAB"] = float(smc_features.get("LIQ_NEAR", 0))
     
+    # Apply goal-conditioning to weights if goal provided
+    eff_weights = weights
+    if user_goal and smc_features:
+        eff_weights = apply_goal_to_weights(
+            weights,
+            user_goal,
+            smc_features.get("HTF_TREND", 0.0)
+        )
+    
     # Normalize signals
     normalized = normalize_signals(combined_signals)
     
     # Calculate weighted score with dynamic weights
-    entry_score = weighted_score(normalized, weights, context)
+    entry_score = weighted_score(normalized, eff_weights, context)
+    
+    # Apply Platt calibration if available
+    _v = load_platt()
+    entry_score_calibrated = platt_apply(entry_score, *_v) if _v else entry_score
     
     logger.info(
         "Entry score computed",
         signals=len(combined_signals),
-        entry_score=round(entry_score, 3),
+        entry_score=round(entry_score_calibrated, 3),
+        calibrated=_v is not None,
         has_smc=smc_features is not None,
         has_context=context is not None
     )
     
-    return entry_score
+    return entry_score_calibrated
 
 
 def compute_confluence_score(

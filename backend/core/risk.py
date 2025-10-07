@@ -5,6 +5,7 @@ Includes countertrend detection and dynamic size adjustment
 
 from typing import Dict, Optional
 import structlog
+from backend.core.goal_conditioning import resolve_goal, apply_goal
 
 logger = structlog.get_logger()
 
@@ -66,7 +67,9 @@ def position_size_with_policy(
     atr_pct: float,
     risk_policy: RiskPolicy,
     countertrend: bool = False,
-    news_high_impact: bool = False
+    news_high_impact: bool = False,
+    user_goal: Optional[str] = None,
+    htf_trend: float = 0.0
 ) -> float:
     """
     Calculate position size with policy adjustments
@@ -77,6 +80,8 @@ def position_size_with_policy(
         risk_policy: RiskPolicy instance
         countertrend: True if trading against HTF trend
         news_high_impact: True if high-impact news event nearby
+        user_goal: Optional goal for goal-conditioning ("auto", "continuation", "reversal")
+        htf_trend: HTF trend value (-1, 0, or 1) for goal resolution
     
     Returns:
         Adjusted position size as fraction of equity
@@ -93,6 +98,13 @@ def position_size_with_policy(
     if news_high_impact:
         size *= risk_policy.news_impact_reduction
         logger.info("Position size reduced (news impact)", reduction=risk_policy.news_impact_reduction)
+    
+    # Apply goal-conditioning risk scaling
+    if user_goal:
+        goal = resolve_goal(user_goal, htf_trend)
+        _, _, rscale = apply_goal(goal)
+        size *= float(rscale)
+        logger.info("Position size scaled (goal-conditioning)", goal=goal, scale=rscale)
     
     # Final cap
     size = max(0.0, min(size, risk_policy.max_position))
