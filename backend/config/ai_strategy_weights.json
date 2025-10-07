@@ -1,0 +1,14 @@
+{
+  "weights": {
+    "RSI": 0.2,
+    "MACD": 0.2,
+    "SMC": 0.25,
+    "Harmonic": 0.1,
+    "Sentiment": 0.2,
+    "SAR": 0.05
+  },
+  "thresholds": {
+    "EntryScore": 0.65,
+    "ConfluenceScore": 0.55
+  }
+}

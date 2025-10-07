@@ -47,6 +47,9 @@ from scoring.api import router as scoring_router
 # Import crypto data aggregation router
 from routers.data import router as data_router
 
+# Import AI router
+from routers.ai import router as ai_router
+
 # Import database components
 from database.connection import get_db, init_db
 from database.models import TradingSession, SignalRecord, TradeRecord, SystemMetrics, RiskLimit
@@ -128,6 +131,7 @@ app.add_middleware(
 # Include routers
 app.include_router(scoring_router)
 app.include_router(data_router)
+app.include_router(ai_router)
 
 # Sentiment API proxy endpoints to avoid CORS
 @app.get("/api/sentiment/fear-greed")
