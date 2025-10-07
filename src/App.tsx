@@ -8,9 +8,10 @@ import { SMCOverlayToggles } from './components/SMCOverlayToggles';
 import { StrategyHUD } from './components/StrategyHUD';
 import { SMCDemoPanel } from './components/SMCDemoPanel';
 import AIControls from './pages/AIControls';
+import CalibrationLab from './pages/CalibrationLab';
 import { useStrategy } from './state/useStrategy';
 
-type Tab = 'dashboard' | 'strategy' | 'ai';
+type Tab = 'dashboard' | 'strategy' | 'ai' | 'calibration';
 
 function Dashboard() {
   const [s] = useStrategy();
@@ -102,12 +103,23 @@ function App() {
             >
               AI Controls
             </button>
+            <button
+              onClick={() => setActiveTab('calibration')}
+              className={`px-4 py-2 rounded transition-colors ${
+                activeTab === 'calibration'
+                  ? 'bg-blue-500 text-white'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              Calibration
+            </button>
           </nav>
 
           {/* Tab Content */}
           {activeTab === 'dashboard' && <OverviewPage />}
           {activeTab === 'strategy' && <Dashboard />}
           {activeTab === 'ai' && <AIControls />}
+          {activeTab === 'calibration' && <CalibrationLab />}
         </AppShell>
       </div>
     </ErrorBoundary>
