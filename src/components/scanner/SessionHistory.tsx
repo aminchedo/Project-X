@@ -321,4 +321,15 @@ const SessionHistory: React.FC<SessionHistoryProps> = ({ onLoadSession }) => {
   );
 };
 
+// Export function to add scan sessions
+export const addScanSession = async (sessionData: Partial<ScanSession>) => {
+  try {
+    const response = await api.scanner.saveSession(sessionData);
+    return response;
+  } catch (error) {
+    console.error('Failed to save scan session:', error);
+    throw error;
+  }
+};
+
 export default SessionHistory;

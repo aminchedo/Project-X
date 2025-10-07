@@ -118,7 +118,7 @@ const ResultsChart: React.FC<ResultsChartProps> = ({ results, onPointClick }) =>
           font: {
             family: 'Inter',
             size: 12,
-            weight: '600'
+            weight: 600
           },
           padding: 20,
           usePointStyle: true,
@@ -156,7 +156,7 @@ const ResultsChart: React.FC<ResultsChartProps> = ({ results, onPointClick }) =>
           font: {
             family: 'Inter',
             size: 13,
-            weight: '600'
+            weight: 600
           }
         },
         ticks: {
@@ -180,7 +180,7 @@ const ResultsChart: React.FC<ResultsChartProps> = ({ results, onPointClick }) =>
           font: {
             family: 'Inter',
             size: 13,
-            weight: '600'
+            weight: 600
           }
         },
         ticks: {

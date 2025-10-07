@@ -30,7 +30,7 @@ export const ProfessionalLayout: React.FC<ProfessionalLayoutProps> = ({
       
       {/* Main Layout */}
       <div className="relative z-10 flex flex-col min-h-screen">
-        {/* Header */}
+      {/* Header */}
         {header && (
           <header className="sticky top-0 z-50 bg-slate-900/80 backdrop-blur-xl border-b border-slate-700/50 shadow-lg shadow-slate-900/20">
             {header}
@@ -71,15 +71,15 @@ export const ProfessionalLayout: React.FC<ProfessionalLayoutProps> = ({
                       </div>
                     )}
                   </div>
-                </div>
-              )}
-              
+        </div>
+      )}
+
               {/* Page Content - Responsive */}
               <div className="space-y-4 sm:space-y-6 lg:space-y-8">
-                {children}
+          {children}
               </div>
             </div>
-          </main>
+      </main>
         </div>
       </div>
     </div>
