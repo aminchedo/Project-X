@@ -1,379 +1,318 @@
-import React, { useRef, useEffect, useState } from 'react';
-import * as d3 from 'd3';
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { Bar } from 'react-chartjs-2';
+import { api } from '../services/api';
+import { realtimeWs } from '../services/websocket';
+import { AlertCircle, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ChartOptions
+} from 'chart.js';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 interface OrderBookLevel {
   price: number;
-  size: number;
+  amount: number;
+  total: number;
 }
 
 interface MarketDepthData {
-  symbol: string;
-  timestamp: number;
   bids: OrderBookLevel[];
   asks: OrderBookLevel[];
   spread: number;
   mid_price: number;
+  timestamp: string;
 }
 
 interface MarketDepthChartProps {
-  data: MarketDepthData;
-  width?: number;
-  height?: number;
-  maxLevels?: number;
+  symbol?: string;
+  depth?: number;
 }
 
-const MarketDepthChart: React.FC<MarketDepthChartProps> = ({
-  data,
-  width = 800,
-  height = 400,
-  maxLevels = 20
+const MarketDepthChart: React.FC<MarketDepthChartProps> = ({ 
+  symbol = 'BTCUSDT',
+  depth = 20
 }) => {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [hoveredLevel, setHoveredLevel] = useState<{
-    price: number;
-    size: number;
-    side: 'bid' | 'ask';
-    x: number;
-    y: number;
-  } | null>(null);
+  const [data, setData] = useState<MarketDepthData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    if (!svgRef.current || !data.bids.length || !data.asks.length) return;
+    fetchMarketDepth();
+    connectWebSocket();
 
-    const svg = d3.select(svgRef.current);
-    svg.selectAll('*').remove();
+    const interval = setInterval(fetchMarketDepth, 5000);
+    return () => {
+      clearInterval(interval);
+      realtimeWs.disconnect();
+    };
+  }, [symbol]);
 
-    const margin = { top: 40, right: 60, bottom: 60, left: 80 };
-    const innerWidth = width - margin.left - margin.right;
-    const innerHeight = height - margin.top - margin.bottom;
+  const fetchMarketDepth = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await api.trading.getMarketDepth(symbol);
+      setData(response);
+    } catch (err) {
+      setError('Failed to load market depth');
+      console.error('Market depth error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const g = svg
-      .append('g')
-      .attr('transform', `translate(${margin.left},${margin.top})`);
-
-    // Prepare data
-    const bids = data.bids.slice(0, maxLevels).sort((a, b) => b.price - a.price);
-    const asks = data.asks.slice(0, maxLevels).sort((a, b) => a.price - b.price);
-
-    // Calculate cumulative sizes
-    let cumulativeBidSize = 0;
-    const bidsWithCumulative = bids.map(bid => {
-      cumulativeBidSize += bid.size;
-      return { ...bid, cumulative: cumulativeBidSize };
-    });
-
-    let cumulativeAskSize = 0;
-    const asksWithCumulative = asks.map(ask => {
-      cumulativeAskSize += ask.size;
-      return { ...ask, cumulative: cumulativeAskSize };
-    });
-
-    // Create scales
-    const allPrices = [...bids.map(d => d.price), ...asks.map(d => d.price)];
-    const priceExtent = d3.extent(allPrices) as [number, number];
-    const priceRange = priceExtent[1] - priceExtent[0];
+  const connectWebSocket = () => {
+    realtimeWs.connect();
     
-    const xScale = d3
-      .scaleLinear()
-      .domain([priceExtent[0] - priceRange * 0.1, priceExtent[1] + priceRange * 0.1])
-      .range([0, innerWidth]);
+    realtimeWs.onStateChange((state) => {
+      setIsConnected(state === 'connected');
+    });
 
-    const maxCumulative = Math.max(
-      d3.max(bidsWithCumulative, d => d.cumulative) || 0,
-      d3.max(asksWithCumulative, d => d.cumulative) || 0
+    realtimeWs.onMessage((event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'orderbook' && message.symbol === symbol) {
+          setData(message.data);
+        }
+      } catch (err) {
+        console.error('WebSocket message error:', err);
+      }
+    });
+  };
+
+  if (loading && !data) {
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-8 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500 mx-auto mb-4"></div>
+        <p className="text-slate-400">Loading market depth...</p>
+      </div>
     );
+  }
 
-    const yScale = d3
-      .scaleLinear()
-      .domain([0, maxCumulative * 1.1])
-      .range([innerHeight, 0]);
+  if (error && !data) {
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-xl border border-red-500/50 rounded-xl p-8 text-center">
+        <AlertCircle className="text-red-400 mx-auto mb-4" size={48} />
+        <p className="text-slate-50 mb-4">{error}</p>
+        <button 
+          onClick={fetchMarketDepth}
+          className="bg-cyan-500 hover:bg-cyan-600 text-white px-6 py-2 rounded-lg transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
-    // Create area generators
-    const bidArea = d3
-      .area<typeof bidsWithCumulative[0]>()
-      .x(d => xScale(d.price))
-      .y0(innerHeight)
-      .y1(d => yScale(d.cumulative))
-      .curve(d3.curveStepAfter);
+  if (!data) {
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-12 text-center">
+        <TrendingUp className="w-12 h-12 mx-auto mb-4 text-slate-600" />
+        <p className="text-slate-400 mb-2">No Market Depth Data</p>
+        <p className="text-slate-500 text-sm">Data will appear when available</p>
+      </div>
+    );
+  }
 
-    const askArea = d3
-      .area<typeof asksWithCumulative[0]>()
-      .x(d => xScale(d.price))
-      .y0(innerHeight)
-      .y1(d => yScale(d.cumulative))
-      .curve(d3.curveStepBefore);
+  // Prepare chart data
+  const chartData = {
+    labels: [
+      ...data.bids.slice(0, depth).reverse().map(b => b.price.toFixed(2)),
+      ...data.asks.slice(0, depth).map(a => a.price.toFixed(2))
+    ],
+    datasets: [
+      {
+        label: 'Bids',
+        data: [
+          ...data.bids.slice(0, depth).reverse().map(b => b.total),
+          ...new Array(depth).fill(0)
+        ],
+        backgroundColor: 'rgba(74, 222, 128, 0.5)',
+        borderColor: 'rgba(74, 222, 128, 1)',
+        borderWidth: 1,
+      },
+      {
+        label: 'Asks',
+        data: [
+          ...new Array(depth).fill(0),
+          ...data.asks.slice(0, depth).map(a => a.total)
+        ],
+        backgroundColor: 'rgba(248, 113, 113, 0.5)',
+        borderColor: 'rgba(248, 113, 113, 1)',
+        borderWidth: 1,
+      }
+    ]
+  };
 
-    // Add gradient definitions
-    const defs = svg.append('defs');
+  const chartOptions: ChartOptions<'bar'> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          color: '#f8fafc',
+          font: { family: 'Inter', size: 12, weight: '600' },
+          padding: 15
+        }
+      },
+      tooltip: {
+        backgroundColor: 'rgba(15, 23, 42, 0.95)',
+        titleColor: '#f8fafc',
+        bodyColor: '#cbd5e1',
+        borderColor: '#334155',
+        borderWidth: 1,
+        padding: 12,
+        callbacks: {
+          label: function(context) {
+            return `Total: ${context.parsed.y.toFixed(4)}`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        stacked: false,
+        ticks: {
+          color: '#94a3b8',
+          font: { family: 'Inter', size: 10 },
+          maxRotation: 45,
+          minRotation: 45
+        },
+        grid: {
+          color: 'rgba(51, 65, 85, 0.3)'
+        }
+      },
+      y: {
+        ticks: {
+          color: '#94a3b8',
+          font: { family: 'Inter', size: 11 }
+        },
+        grid: {
+          color: 'rgba(51, 65, 85, 0.3)'
+        }
+      }
+    }
+  };
 
-    const bidGradient = defs
-      .append('linearGradient')
-      .attr('id', 'bid-gradient')
-      .attr('gradientUnits', 'userSpaceOnUse')
-      .attr('x1', 0).attr('y1', innerHeight)
-      .attr('x2', 0).attr('y2', 0);
-
-    bidGradient.append('stop')
-      .attr('offset', '0%')
-      .attr('stop-color', '#10b981')
-      .attr('stop-opacity', 0.8);
-
-    bidGradient.append('stop')
-      .attr('offset', '100%')
-      .attr('stop-color', '#10b981')
-      .attr('stop-opacity', 0.2);
-
-    const askGradient = defs
-      .append('linearGradient')
-      .attr('id', 'ask-gradient')
-      .attr('gradientUnits', 'userSpaceOnUse')
-      .attr('x1', 0).attr('y1', innerHeight)
-      .attr('x2', 0).attr('y2', 0);
-
-    askGradient.append('stop')
-      .attr('offset', '0%')
-      .attr('stop-color', '#ef4444')
-      .attr('stop-opacity', 0.8);
-
-    askGradient.append('stop')
-      .attr('offset', '100%')
-      .attr('stop-color', '#ef4444')
-      .attr('stop-opacity', 0.2);
-
-    // Draw bid area
-    g.append('path')
-      .datum(bidsWithCumulative)
-      .attr('fill', 'url(#bid-gradient)')
-      .attr('stroke', '#10b981')
-      .attr('stroke-width', 2)
-      .attr('d', bidArea);
-
-    // Draw ask area
-    g.append('path')
-      .datum(asksWithCumulative)
-      .attr('fill', 'url(#ask-gradient)')
-      .attr('stroke', '#ef4444')
-      .attr('stroke-width', 2)
-      .attr('d', askArea);
-
-    // Add price levels as interactive rectangles
-    const bidLevels = g
-      .selectAll('.bid-level')
-      .data(bidsWithCumulative)
-      .enter()
-      .append('rect')
-      .attr('class', 'bid-level')
-      .attr('x', d => xScale(d.price) - 2)
-      .attr('y', d => yScale(d.cumulative))
-      .attr('width', 4)
-      .attr('height', d => innerHeight - yScale(d.cumulative))
-      .attr('fill', 'transparent')
-      .style('cursor', 'pointer')
-      .on('mouseover', function(event, d) {
-        setHoveredLevel({
-          price: d.price,
-          size: d.size,
-          side: 'bid',
-          x: event.pageX,
-          y: event.pageY
-        });
-        d3.select(this).attr('fill', '#10b981').attr('fill-opacity', 0.3);
-      })
-      .on('mouseout', function() {
-        setHoveredLevel(null);
-        d3.select(this).attr('fill', 'transparent');
-      });
-
-    const askLevels = g
-      .selectAll('.ask-level')
-      .data(asksWithCumulative)
-      .enter()
-      .append('rect')
-      .attr('class', 'ask-level')
-      .attr('x', d => xScale(d.price) - 2)
-      .attr('y', d => yScale(d.cumulative))
-      .attr('width', 4)
-      .attr('height', d => innerHeight - yScale(d.cumulative))
-      .attr('fill', 'transparent')
-      .style('cursor', 'pointer')
-      .on('mouseover', function(event, d) {
-        setHoveredLevel({
-          price: d.price,
-          size: d.size,
-          side: 'ask',
-          x: event.pageX,
-          y: event.pageY
-        });
-        d3.select(this).attr('fill', '#ef4444').attr('fill-opacity', 0.3);
-      })
-      .on('mouseout', function() {
-        setHoveredLevel(null);
-        d3.select(this).attr('fill', 'transparent');
-      });
-
-    // Add mid price line
-    const midPriceLine = g
-      .append('line')
-      .attr('x1', xScale(data.mid_price))
-      .attr('x2', xScale(data.mid_price))
-      .attr('y1', 0)
-      .attr('y2', innerHeight)
-      .attr('stroke', '#fbbf24')
-      .attr('stroke-width', 2)
-      .attr('stroke-dasharray', '5,5');
-
-    // Add mid price label
-    g.append('text')
-      .attr('x', xScale(data.mid_price) + 5)
-      .attr('y', 15)
-      .attr('fill', '#fbbf24')
-      .attr('font-size', '12px')
-      .attr('font-weight', 'bold')
-      .text(`Mid: $${data.mid_price.toFixed(4)}`);
-
-    // Add spread indicator
-    const spreadWidth = xScale(data.mid_price + data.spread / 2) - xScale(data.mid_price - data.spread / 2);
-    g.append('rect')
-      .attr('x', xScale(data.mid_price - data.spread / 2))
-      .attr('y', -5)
-      .attr('width', spreadWidth)
-      .attr('height', 10)
-      .attr('fill', '#fbbf24')
-      .attr('fill-opacity', 0.3)
-      .attr('stroke', '#fbbf24')
-      .attr('stroke-width', 1);
-
-    // Add axes
-    const xAxis = d3
-      .axisBottom(xScale)
-      .tickFormat(d3.format('$.4f'))
-      .ticks(8);
-
-    const yAxis = d3
-      .axisLeft(yScale)
-      .tickFormat(d3.format('.2s'))
-      .ticks(6);
-
-    g.append('g')
-      .attr('transform', `translate(0,${innerHeight})`)
-      .call(xAxis)
-      .selectAll('text')
-      .attr('fill', '#ffffff')
-      .attr('font-size', '10px');
-
-    g.append('g')
-      .call(yAxis)
-      .selectAll('text')
-      .attr('fill', '#ffffff')
-      .attr('font-size', '10px');
-
-    // Add axis labels
-    g.append('text')
-      .attr('transform', 'rotate(-90)')
-      .attr('y', 0 - margin.left)
-      .attr('x', 0 - innerHeight / 2)
-      .attr('dy', '1em')
-      .style('text-anchor', 'middle')
-      .attr('fill', '#ffffff')
-      .attr('font-size', '12px')
-      .text('Cumulative Size');
-
-    g.append('text')
-      .attr('transform', `translate(${innerWidth / 2}, ${innerHeight + margin.bottom - 10})`)
-      .style('text-anchor', 'middle')
-      .attr('fill', '#ffffff')
-      .attr('font-size', '12px')
-      .text('Price ($)');
-
-    // Add title
-    svg
-      .append('text')
-      .attr('x', width / 2)
-      .attr('y', 25)
-      .attr('text-anchor', 'middle')
-      .attr('fill', '#ffffff')
-      .attr('font-size', '16px')
-      .attr('font-weight', 'bold')
-      .text(`${data.symbol} Order Book Depth`);
-
-  }, [data, width, height, maxLevels]);
+  const spreadPercentage = ((data.spread / data.mid_price) * 100).toFixed(4);
 
   return (
-    <div className="relative bg-gray-900 rounded-lg p-4">
-      <svg
-        ref={svgRef}
-        width={width}
-        height={height}
-        style={{ background: 'transparent' }}
-      />
-      
-      {hoveredLevel && (
-        <div
-          className="fixed z-50 bg-black bg-opacity-90 text-white p-3 rounded-lg shadow-lg pointer-events-none"
-          style={{
-            left: hoveredLevel.x + 10,
-            top: hoveredLevel.y - 10,
-            transform: 'translateY(-100%)',
-          }}
+    <div className="space-y-6">
+      {/* Header */}
+      <motion.div 
+        className="flex items-center justify-between flex-wrap gap-4"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div>
+          <h2 className="text-2xl font-bold text-slate-50">Market Depth - {symbol}</h2>
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
+            <p className="text-sm text-slate-400">
+              {isConnected ? 'Real-time order book' : 'Disconnected'}
+            </p>
+          </div>
+        </div>
+        <motion.button
+          onClick={fetchMarketDepth}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-50 rounded-lg font-medium transition-all disabled:opacity-50"
         >
-          <div className={`text-sm font-semibold ${
-            hoveredLevel.side === 'bid' ? 'text-green-400' : 'text-red-400'
-          }`}>
-            {hoveredLevel.side.toUpperCase()} Level
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </motion.button>
+      </motion.div>
+
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-slate-400 text-sm font-medium">Mid Price</span>
+            <TrendingUp className="text-cyan-400" size={18} />
           </div>
-          <div className="text-lg font-bold">
-            ${hoveredLevel.price.toFixed(4)}
+          <p className="text-3xl font-bold text-slate-50">
+            ${data.mid_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+        </motion.div>
+
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-slate-400 text-sm font-medium">Spread</span>
+            <TrendingDown className="text-orange-400" size={18} />
           </div>
-          <div className="text-sm">
-            Size: {hoveredLevel.size.toFixed(2)}
+          <p className="text-3xl font-bold text-orange-400">
+            ${data.spread.toFixed(2)}
+          </p>
+          <p className="text-xs text-slate-500 mt-1">{spreadPercentage}%</p>
+        </motion.div>
+
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-slate-400 text-sm font-medium">Total Volume</span>
           </div>
-        </div>
-      )}
-      
-      {/* Statistics panel */}
-      <div className="absolute top-4 right-4 bg-black bg-opacity-60 text-white p-3 rounded text-xs">
-        <div className="space-y-1">
-          <div className="flex justify-between">
-            <span>Spread:</span>
-            <span className="text-yellow-400">${data.spread.toFixed(4)}</span>
+          <div className="flex items-center gap-4">
+            <div>
+              <p className="text-lg font-bold text-green-400">
+                {data.bids.reduce((sum, b) => sum + b.total, 0).toFixed(2)}
+              </p>
+              <p className="text-xs text-slate-500">Bids</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-red-400">
+                {data.asks.reduce((sum, a) => sum + a.total, 0).toFixed(2)}
+              </p>
+              <p className="text-xs text-slate-500">Asks</p>
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span>Spread %:</span>
-            <span className="text-yellow-400">
-              {((data.spread / data.mid_price) * 100).toFixed(3)}%
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span>Best Bid:</span>
-            <span className="text-green-400">${data.bids[0]?.price.toFixed(4)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Best Ask:</span>
-            <span className="text-red-400">${data.asks[0]?.price.toFixed(4)}</span>
-          </div>
-          <div className="text-gray-400 mt-2">
-            Updated: {new Date(data.timestamp * 1000).toLocaleTimeString()}
-          </div>
-        </div>
+        </motion.div>
       </div>
 
-      {/* Legend */}
-      <div className="absolute bottom-4 left-4 bg-black bg-opacity-60 text-white p-3 rounded text-xs">
-        <div className="space-y-1">
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-2 bg-green-500 opacity-60"></div>
-            <span>Bids</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-2 bg-red-500 opacity-60"></div>
-            <span>Asks</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-1 bg-yellow-500 border-dashed border border-yellow-500"></div>
-            <span>Mid Price</span>
-          </div>
+      {/* Chart */}
+      <motion.div
+        className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+      >
+        <h3 className="text-xl font-semibold text-slate-50 mb-6">Order Book Depth</h3>
+        <div className="h-[400px]">
+          <Bar data={chartData} options={chartOptions} />
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

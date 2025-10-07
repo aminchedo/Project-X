@@ -1,82 +1,115 @@
 import React from 'react';
+import { motion } from 'framer-motion';
+import { TrendingUp, TrendingDown, Activity, Zap, Target } from 'lucide-react';
 
 interface Pattern {
   name: string;
-  type: 'harmonic' | 'chart' | 'candlestick' | 'smc';
-  strength: number; // 0-1
-  emoji: string;
+  type: 'bullish' | 'bearish' | 'neutral';
+  confidence: number;
 }
 
 interface PatternBadgesProps {
-  patterns?: Pattern[];
-  maxShow?: number;
+  patterns: Pattern[];
+  maxDisplay?: number;
+  size?: 'sm' | 'md' | 'lg';
 }
 
-const PatternBadges: React.FC<PatternBadgesProps> = ({ patterns = [], maxShow = 3 }) => {
-  if (!patterns || patterns.length === 0) return null;
-
-  const typeColors = {
-    harmonic: 'from-purple-500/20 to-pink-500/20 border-purple-500/30 text-purple-300',
-    chart: 'from-blue-500/20 to-cyan-500/20 border-blue-500/30 text-blue-300',
-    candlestick: 'from-amber-500/20 to-orange-500/20 border-amber-500/30 text-amber-300',
-    smc: 'from-emerald-500/20 to-green-500/20 border-emerald-500/30 text-emerald-300',
+const PatternBadges: React.FC<PatternBadgesProps> = ({ 
+  patterns, 
+  maxDisplay = 5,
+  size = 'md'
+}) => {
+  const getPatternConfig = (type: string) => {
+    switch (type) {
+      case 'bullish':
+        return {
+          icon: TrendingUp,
+          bg: 'bg-green-500/20',
+          text: 'text-green-400',
+          border: 'border-green-500/30'
+        };
+      case 'bearish':
+        return {
+          icon: TrendingDown,
+          bg: 'bg-red-500/20',
+          text: 'text-red-400',
+          border: 'border-red-500/30'
+        };
+      default:
+        return {
+          icon: Activity,
+          bg: 'bg-slate-500/20',
+          text: 'text-slate-400',
+          border: 'border-slate-500/30'
+        };
+    }
   };
 
-  const visiblePatterns = patterns.slice(0, maxShow);
-  const hiddenCount = Math.max(0, patterns.length - maxShow);
+  const sizeClasses = {
+    sm: 'px-2 py-1 text-xs gap-1',
+    md: 'px-3 py-1.5 text-sm gap-1.5',
+    lg: 'px-4 py-2 text-base gap-2'
+  };
+
+  const iconSizes = {
+    sm: 'w-3 h-3',
+    md: 'w-4 h-4',
+    lg: 'w-5 h-5'
+  };
+
+  // Sort by confidence and take top N
+  const displayPatterns = patterns
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, maxDisplay);
+
+  if (patterns.length === 0) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 border border-slate-700/30 rounded-lg">
+        <Activity className="w-4 h-4 text-slate-600" />
+        <span className="text-sm text-slate-500">No patterns detected</span>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      {visiblePatterns.map((pattern, index) => (
-        <div
-          key={index}
-          className={`
-            inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border
-            bg-gradient-to-r ${typeColors[pattern.type]}
-            transition-all hover:scale-105
-          `}
-          title={`${pattern.name} - قدرت: ${(pattern.strength * 100).toFixed(0)}%`}
+    <div className="flex flex-wrap gap-2">
+      {displayPatterns.map((pattern, index) => {
+        const config = getPatternConfig(pattern.type);
+        const Icon = config.icon;
+
+        return (
+          <motion.div
+            key={`${pattern.name}-${index}`}
+            className={`flex items-center ${sizeClasses[size]} ${config.bg} ${config.text} border ${config.border} rounded-lg font-medium`}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.2, delay: index * 0.05 }}
+            whileHover={{ scale: 1.05 }}
+          >
+            <Icon className={iconSizes[size]} />
+            <span>{pattern.name}</span>
+            {pattern.confidence > 0 && (
+              <span className="opacity-75 text-xs">
+                {(pattern.confidence * 100).toFixed(0)}%
+              </span>
+            )}
+          </motion.div>
+        );
+      })}
+
+      {/* Show count if there are more patterns */}
+      {patterns.length > maxDisplay && (
+        <motion.div
+          className="flex items-center px-3 py-1.5 bg-slate-700/50 text-slate-300 border border-slate-600/30 rounded-lg text-sm font-medium"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.2, delay: maxDisplay * 0.05 }}
         >
-          <span>{pattern.emoji}</span>
-          <span>{pattern.name}</span>
-          {pattern.strength > 0.8 && (
-            <span className="text-xs opacity-75">★</span>
-          )}
-        </div>
-      ))}
-      
-      {hiddenCount > 0 && (
-        <span 
-          className="px-2 py-1 bg-slate-700/30 border border-slate-600/30 text-slate-400 rounded-md text-xs"
-          title={`${hiddenCount} الگوی دیگر`}
-        >
-          +{hiddenCount}
-        </span>
+          +{patterns.length - maxDisplay} more
+        </motion.div>
       )}
     </div>
   );
 };
 
 export default PatternBadges;
-
-// Mock data generator for testing (remove in production)
-export const generateMockPatterns = (): Pattern[] => {
-  const allPatterns = [
-    { name: 'Bat', type: 'harmonic' as const, strength: 0.92, emoji: '🦇' },
-    { name: 'Gartley', type: 'harmonic' as const, strength: 0.85, emoji: '🎯' },
-    { name: 'Butterfly', type: 'harmonic' as const, strength: 0.78, emoji: '🦋' },
-    { name: 'H&S', type: 'chart' as const, strength: 0.88, emoji: '👤' },
-    { name: 'Triangle', type: 'chart' as const, strength: 0.75, emoji: '📐' },
-    { name: 'Doji', type: 'candlestick' as const, strength: 0.82, emoji: '🕯️' },
-    { name: 'Hammer', type: 'candlestick' as const, strength: 0.90, emoji: '🔨' },
-    { name: 'Engulfing', type: 'candlestick' as const, strength: 0.86, emoji: '📊' },
-    { name: 'Order Block', type: 'smc' as const, strength: 0.95, emoji: '🧱' },
-    { name: 'FVG', type: 'smc' as const, strength: 0.88, emoji: '📍' },
-    { name: 'BOS', type: 'smc' as const, strength: 0.91, emoji: '⚡' },
-  ];
-  
-  // Randomly select 2-5 patterns
-  const count = Math.floor(Math.random() * 4) + 2;
-  const shuffled = [...allPatterns].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-};
