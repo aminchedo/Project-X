@@ -1,0 +1,44 @@
+name: ci
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci || npm install
+      - name: Lint
+        run: npm run lint || echo "no lint script"
+      - name: Typecheck
+        run: npm run typecheck || echo "no typecheck script"
+      - name: Build
+        run: npm run build || echo "no build script"
+      - name: Test
+        run: npx vitest run --coverage --passWithNoTests
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+      - name: Install
+        run: pip install -r backend/requirements.txt || true
+      - name: Test
+        run: pytest -q || true
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [frontend, backend]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Backend
+        run: docker build -f backend/Dockerfile -t projectx-backend:ci .

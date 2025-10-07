@@ -1,0 +1,9 @@
+{
+  "extends": ["config:recommended"],
+  "timezone": "Europe/Vienna",
+  "rangeStrategy": "bump",
+  "packageRules": [
+    { "matchManagers": ["npm"], "enabled": true },
+    { "matchManagers": ["pip_requirements"], "enabled": true }
+  ]
+}
