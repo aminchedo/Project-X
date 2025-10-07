@@ -3,10 +3,37 @@ import { AppShell } from './components/Layout/AppShell';
 import { OverviewPage } from './components/Overview/OverviewPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { api } from './services/api';
+import { NewsBanner } from './components/NewsBanner';
+import { SMCOverlayToggles } from './components/SMCOverlayToggles';
+import { StrategyHUD } from './components/StrategyHUD';
+import { SMCDemoPanel } from './components/SMCDemoPanel';
+import AIControls from './pages/AIControls';
+import { useStrategy } from './state/useStrategy';
+
+type Tab = 'dashboard' | 'strategy' | 'ai';
+
+function Dashboard() {
+  const [s] = useStrategy();
+  return (
+    <div dir={s.rtl ? 'rtl':'ltr'} className="p-4 space-y-3">
+      <SMCDemoPanel />
+      <NewsBanner news={s.regime.news} highVol={s.regime.highVol} wideSpread={s.regime.wideSpread}/>
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+        <h3 className="text-sm font-semibold mb-3 text-gray-700 dark:text-gray-300">SMC Overlay Controls</h3>
+        <SMCOverlayToggles/>
+      </div>
+      <StrategyHUD/>
+      <div className="mt-4">
+        <OverviewPage />
+      </div>
+    </div>
+  );
+}
 
 function App() {
   const [isBackendConnected, setIsBackendConnected] = useState(false);
   const [backendStatus, setBackendStatus] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
 
   // Check backend connectivity on startup
   useEffect(() => {
@@ -43,7 +70,44 @@ function App() {
         )}
 
         <AppShell>
-          <OverviewPage />
+          {/* Tab Navigation */}
+          <nav className="p-3 border-b border-gray-200 dark:border-gray-700 flex gap-3 bg-white dark:bg-gray-800">
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`px-4 py-2 rounded transition-colors ${
+                activeTab === 'dashboard'
+                  ? 'bg-blue-500 text-white'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={() => setActiveTab('strategy')}
+              className={`px-4 py-2 rounded transition-colors ${
+                activeTab === 'strategy'
+                  ? 'bg-blue-500 text-white'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              Strategy & SMC
+            </button>
+            <button
+              onClick={() => setActiveTab('ai')}
+              className={`px-4 py-2 rounded transition-colors ${
+                activeTab === 'ai'
+                  ? 'bg-blue-500 text-white'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              AI Controls
+            </button>
+          </nav>
+
+          {/* Tab Content */}
+          {activeTab === 'dashboard' && <OverviewPage />}
+          {activeTab === 'strategy' && <Dashboard />}
+          {activeTab === 'ai' && <AIControls />}
         </AppShell>
       </div>
     </ErrorBoundary>
