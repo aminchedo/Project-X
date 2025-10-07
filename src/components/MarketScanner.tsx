@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../services/api';
-import { realtimeWs } from '../services/websocket';
+import { realtimeTradingWs } from '../services/websocket';
 import { Search, Play, Pause, RefreshCw, AlertCircle } from 'lucide-react';
 import ResultsTable from './scanner/ResultsTable';
 import ResultsGrid from './scanner/ResultsGrid';
@@ -23,16 +23,17 @@ const MarketScanner: React.FC = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'grid' | 'chart' | 'heatmap'>('table');
   const [isConnected, setIsConnected] = useState(false);
+  const [selectedSymbols, setSelectedSymbols] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     connectWebSocket();
-    return () => realtimeWs.disconnect();
+    return () => realtimeTradingWs.disconnect();
   }, []);
 
   const connectWebSocket = () => {
-    realtimeWs.connect();
-    realtimeWs.onStateChange((state) => setIsConnected(state === 'connected'));
-    realtimeWs.onMessage((event) => {
+    realtimeTradingWs.connect();
+    realtimeTradingWs.onStateChange((state) => setIsConnected(state === 'connected'));
+    realtimeTradingWs.onMessage((event) => {
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'scan_result') {
@@ -61,6 +62,23 @@ const MarketScanner: React.FC = () => {
 
   const stopScan = () => {
     setIsScanning(false);
+  };
+  
+  const handleToggleSelection = (symbol: string) => {
+    setSelectedSymbols(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(symbol)) {
+        newSet.delete(symbol);
+      } else {
+        newSet.add(symbol);
+      }
+      return newSet;
+    });
+  };
+  
+  const handleViewDetails = (symbol: string) => {
+    console.log(`Viewing details for ${symbol}`);
+    // Implement view details functionality
   };
 
   return (
@@ -134,7 +152,14 @@ const MarketScanner: React.FC = () => {
         </motion.div>
       )}
 
-      {viewMode === 'table' && <ResultsTable results={results} />}
+      {viewMode === 'table' && (
+        <ResultsTable 
+          results={results} 
+          selectedSymbols={selectedSymbols} 
+          onToggleSelection={handleToggleSelection} 
+          onViewDetails={handleViewDetails} 
+        />
+      )}
       {viewMode === 'grid' && <ResultsGrid results={results} />}
       {viewMode === 'chart' && <ResultsChart results={results} />}
       {viewMode === 'heatmap' && <ScannerHeatmap results={results} />}

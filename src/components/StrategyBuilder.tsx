@@ -193,6 +193,8 @@ const StrategyBuilder: React.FC = () => {
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">Strategy Name</label>
             <input
+              id="strategy-name"
+              name="strategy-name"
               type="text"
               value={strategy.name}
               onChange={(e) => setStrategy({ ...strategy, name: e.target.value })}
@@ -202,6 +204,8 @@ const StrategyBuilder: React.FC = () => {
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">Description</label>
             <input
+              id="strategy-description"
+              name="strategy-description"
               type="text"
               value={strategy.description}
               onChange={(e) => setStrategy({ ...strategy, description: e.target.value })}
@@ -233,6 +237,8 @@ const StrategyBuilder: React.FC = () => {
                   <ChevronRight className="w-5 h-5 text-slate-400" />
                 )}
                 <input
+                  id={`rule-name-${rule.id}`}
+                  name={`rule-name-${rule.id}`}
                   type="text"
                   value={rule.name}
                   onChange={(e) => {
@@ -342,6 +348,8 @@ const StrategyBuilder: React.FC = () => {
                             </select>
 
                             <input
+                              id={`condition-value-${condition.id}`}
+                              name={`condition-value-${condition.id}`}
                               type="number"
                               value={condition.value}
                               onChange={(e) => updateCondition(rule.id, condition.id, 'value', parseFloat(e.target.value))}

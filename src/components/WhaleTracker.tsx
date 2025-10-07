@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../services/api';
-import { realtimeWs } from '../services/websocket';
+import { realtimeTradingWs } from '../services/websocket';
 import {
   Waves,
   TrendingUp,
@@ -47,10 +47,10 @@ const WhaleTracker: React.FC<WhaleTrackerProps> = ({ minValue = 100000 }) => {
     fetchWhaleTransactions();
     connectWebSocket();
 
-    const interval = setInterval(fetchWhaleTransactions, 30000);
+    const interval = setInterval(fetchWhaleTransactions, 60000); // Every 60 seconds (reduced frequency)
     return () => {
       clearInterval(interval);
-      realtimeWs.disconnect();
+      realtimeTradingWs.disconnect();
     };
   }, [minValue]);
 
@@ -58,7 +58,7 @@ const WhaleTracker: React.FC<WhaleTrackerProps> = ({ minValue = 100000 }) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await api.analytics.getWhaleTransactions({ min_value: minValue });
+      const response = await api.analytics.getWhaleMovements({ symbol: 'BTCUSDT', timeframe: '1h' });
       setTransactions(response.transactions || []);
       setStats(response.stats || stats);
     } catch (err) {
@@ -70,13 +70,13 @@ const WhaleTracker: React.FC<WhaleTrackerProps> = ({ minValue = 100000 }) => {
   };
 
   const connectWebSocket = () => {
-    realtimeWs.connect();
+    realtimeTradingWs.connect();
     
-    realtimeWs.onStateChange((state) => {
+    realtimeTradingWs.onStateChange((state) => {
       setIsConnected(state === 'connected');
     });
 
-    realtimeWs.onMessage((event) => {
+    realtimeTradingWs.onMessage((event) => {
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'whale_transaction') {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../services/api';
-import { realtimeWs } from '../services/websocket';
+import { realtimeTradingWs } from '../services/websocket';
 import {
   Zap,
   TrendingUp,
@@ -51,7 +51,7 @@ const SignalsList: React.FC<SignalsListProps> = ({ onSignalClick }) => {
     const interval = setInterval(fetchSignals, 30000);
     return () => {
       clearInterval(interval);
-      realtimeWs.disconnect();
+      realtimeTradingWs.disconnect();
     };
   }, [statusFilter]);
 
@@ -70,13 +70,13 @@ const SignalsList: React.FC<SignalsListProps> = ({ onSignalClick }) => {
   };
 
   const connectWebSocket = () => {
-    realtimeWs.connect();
+    realtimeTradingWs.connect();
     
-    realtimeWs.onStateChange((state) => {
+    realtimeTradingWs.onStateChange((state) => {
       setIsConnected(state === 'connected');
     });
 
-    realtimeWs.onMessage((event) => {
+    realtimeTradingWs.onMessage((event) => {
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'new_signal') {
@@ -177,6 +177,8 @@ const SignalsList: React.FC<SignalsListProps> = ({ onSignalClick }) => {
           <div className="flex-1 min-w-[200px] relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
             <input
+              id="signals-search"
+              name="signals-search"
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}

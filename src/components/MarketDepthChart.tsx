@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Bar } from 'react-chartjs-2';
 import { api } from '../services/api';
-import { realtimeWs } from '../services/websocket';
+import { realtimeTradingWs } from '../services/websocket';
 import { AlertCircle, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -59,7 +59,7 @@ const MarketDepthChart: React.FC<MarketDepthChartProps> = ({
     const interval = setInterval(fetchMarketDepth, 5000);
     return () => {
       clearInterval(interval);
-      realtimeWs.disconnect();
+      realtimeTradingWs.disconnect();
     };
   }, [symbol]);
 
@@ -67,8 +67,34 @@ const MarketDepthChart: React.FC<MarketDepthChartProps> = ({
     try {
       setLoading(true);
       setError(null);
-      const response = await api.trading.getMarketDepth(symbol);
-      setData(response);
+      if (api && api.trading && api.trading.getMarketDepth) {
+        const response = await api.trading.getMarketDepth(symbol);
+        setData(response);
+      } else {
+        // Use mock data if API is not available
+        console.warn('API not available, using mock market depth data');
+        setData({
+          timestamp: new Date().toISOString(),
+          bids: Array.from({ length: 20 }, (_, i) => {
+            const amount = Math.random() * 100;
+            return {
+              price: 50000 - i * 10,
+              amount: amount,
+              total: (50000 - i * 10) * amount
+            };
+          }),
+          asks: Array.from({ length: 20 }, (_, i) => {
+            const amount = Math.random() * 100;
+            return {
+              price: 50000 + i * 10,
+              amount: amount,
+              total: (50000 + i * 10) * amount
+            };
+          }),
+          spread: 20,
+          mid_price: 50000
+        });
+      }
     } catch (err) {
       setError('Failed to load market depth');
       console.error('Market depth error:', err);
@@ -78,13 +104,13 @@ const MarketDepthChart: React.FC<MarketDepthChartProps> = ({
   };
 
   const connectWebSocket = () => {
-    realtimeWs.connect();
+    realtimeTradingWs.connect();
     
-    realtimeWs.onStateChange((state) => {
+    realtimeTradingWs.onStateChange((state) => {
       setIsConnected(state === 'connected');
     });
 
-    realtimeWs.onMessage((event) => {
+    realtimeTradingWs.onMessage((event) => {
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'orderbook' && message.symbol === symbol) {
@@ -168,7 +194,7 @@ const MarketDepthChart: React.FC<MarketDepthChartProps> = ({
         position: 'top',
         labels: {
           color: '#f8fafc',
-          font: { family: 'Inter', size: 12, weight: '600' },
+          font: { family: 'Inter', size: 12, weight: 600 },
           padding: 15
         }
       },

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../services/api';
-import { realtimeWs } from '../services/websocket';
+import { realtimeTradingWs } from '../services/websocket';
 import {
   Newspaper,
   TrendingUp,
@@ -57,7 +57,7 @@ const RealTimeNewsSentiment: React.FC = () => {
     const interval = setInterval(fetchNews, 60000); // Refresh every minute
     return () => {
       clearInterval(interval);
-      realtimeWs.disconnect();
+      realtimeTradingWs.disconnect();
     };
   }, []);
 
@@ -77,13 +77,13 @@ const RealTimeNewsSentiment: React.FC = () => {
   };
 
   const connectWebSocket = () => {
-    realtimeWs.connect();
+    realtimeTradingWs.connect();
     
-    realtimeWs.onStateChange((state) => {
+    realtimeTradingWs.onStateChange((state) => {
       setIsConnected(state === 'connected');
     });
 
-    realtimeWs.onMessage((event) => {
+    realtimeTradingWs.onMessage((event) => {
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'news') {

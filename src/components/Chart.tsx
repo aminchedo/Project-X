@@ -69,11 +69,11 @@ const Chart: React.FC<ChartProps> = ({
       maintainAspectRatio: false,
       plugins: {
         legend: {
-          display: data.datasets.length > 1,
+          display: data?.datasets?.length > 1,
           position: 'top' as const,
           labels: {
             color: '#f8fafc',
-            font: { family: 'Inter', size: 12, weight: '600' },
+            font: { family: 'Inter', size: 12, weight: 600 },
             padding: 15,
             usePointStyle: true
           }
@@ -143,6 +143,18 @@ const Chart: React.FC<ChartProps> = ({
   };
 
   const chartOptions = customOptions || getDefaultOptions();
+
+  // Safety check for data
+  if (!data || !data.datasets || !Array.isArray(data.datasets)) {
+    return (
+      <div className="flex items-center justify-center h-64 bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-xl">
+        <div className="text-center">
+          <AlertCircle className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+          <p className="text-slate-400">No chart data available</p>
+        </div>
+      </div>
+    );
+  }
 
   const renderChart = () => {
     switch (type) {

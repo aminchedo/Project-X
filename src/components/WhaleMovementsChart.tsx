@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Scatter, Bar } from 'react-chartjs-2';
 import { api } from '../services/api';
-import { realtimeWs } from '../services/websocket';
+import { realtimeTradingWs } from '../services/websocket';
 import {
   Waves,
   TrendingUp,
@@ -64,10 +64,10 @@ const WhaleMovementsChart: React.FC<WhaleMovementsChartProps> = ({
     fetchWhaleMovements();
     connectWebSocket();
 
-    const interval = setInterval(fetchWhaleMovements, 30000);
+    const interval = setInterval(fetchWhaleMovements, 60000); // Every 60 seconds (reduced frequency)
     return () => {
       clearInterval(interval);
-      realtimeWs.disconnect();
+      realtimeTradingWs.disconnect();
     };
   }, [symbol, timeframe]);
 
@@ -86,13 +86,13 @@ const WhaleMovementsChart: React.FC<WhaleMovementsChartProps> = ({
   };
 
   const connectWebSocket = () => {
-    realtimeWs.connect();
+    realtimeTradingWs.connect();
     
-    realtimeWs.onStateChange((state) => {
+    realtimeTradingWs.onStateChange((state) => {
       setIsConnected(state === 'connected');
     });
 
-    realtimeWs.onMessage((event) => {
+    realtimeTradingWs.onMessage((event) => {
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'whale_movement' && message.data.symbol === symbol) {
@@ -200,7 +200,7 @@ const WhaleMovementsChart: React.FC<WhaleMovementsChartProps> = ({
         position: 'top',
         labels: {
           color: '#f8fafc',
-          font: { family: 'Inter', size: 12, weight: '600' }
+          font: { family: 'Inter', size: 12, weight: 600 }
         }
       },
       tooltip: {
@@ -244,7 +244,7 @@ const WhaleMovementsChart: React.FC<WhaleMovementsChartProps> = ({
         position: 'top',
         labels: {
           color: '#f8fafc',
-          font: { family: 'Inter', size: 12, weight: '600' }
+          font: { family: 'Inter', size: 12, weight: 600 }
         }
       },
       tooltip: {

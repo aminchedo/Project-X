@@ -166,6 +166,8 @@ const TradeExecutor: React.FC<TradeExecutorProps> = ({
           <label className="block text-sm font-medium text-slate-300 mb-2">Quantity</label>
           <div className="relative">
             <input
+              id="trade-quantity"
+              name="trade-quantity"
               type="number"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
@@ -193,6 +195,8 @@ const TradeExecutor: React.FC<TradeExecutorProps> = ({
               {orderType === 'limit' ? 'Limit Price' : 'Stop Price'}
             </label>
             <input
+              id={orderType === 'stop' ? 'stop-price' : 'limit-price'}
+              name={orderType === 'stop' ? 'stop-price' : 'limit-price'}
               type="number"
               value={orderType === 'stop' ? stopPrice : price}
               onChange={(e) => orderType === 'stop' ? setStopPrice(e.target.value) : setPrice(e.target.value)}

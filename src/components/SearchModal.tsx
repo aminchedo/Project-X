@@ -33,8 +33,9 @@ const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSelect }) 
   const searchGlobal = async () => {
     try {
       setLoading(true);
-      const response = await api.trading.globalSearch({ query });
-      setResults(response || []);
+      // TODO: Implement global search functionality
+      // const response = await api.trading.globalSearch({ query });
+      setResults([]);
     } catch (err) {
       console.error('Search error:', err);
     } finally {

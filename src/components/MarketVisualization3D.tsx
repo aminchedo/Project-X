@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../services/api';
-import { Cube, RefreshCw, AlertCircle, Maximize2, Minimize2 } from 'lucide-react';
+import { Box, RefreshCw, AlertCircle, Maximize2, Minimize2 } from 'lucide-react';
 
 interface MarketData {
   symbol: string;
@@ -203,7 +203,7 @@ const MarketVisualization3D: React.FC<MarketVisualization3DProps> = ({
       >
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-600">
-            <Cube className="w-6 h-6 text-white" />
+            <Box className="w-6 h-6 text-white" />
           </div>
           <div>
             <h2 className="text-2xl font-bold text-slate-50">3D Market Visualization</h2>

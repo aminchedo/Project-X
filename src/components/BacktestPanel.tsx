@@ -7,6 +7,7 @@ import {
   Play, 
   Download,
   TrendingUp,
+  TrendingDown,
   Target,
   AlertCircle,
   Calendar,

@@ -48,7 +48,7 @@ const TradingHistory: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await api.trading.getTradingHistory({ period: selectedPeriod });
+      const response = await api.trading.getTradeHistory(100);
       setTrades(response || []);
     } catch (err) {
       setError('Failed to load trading history');

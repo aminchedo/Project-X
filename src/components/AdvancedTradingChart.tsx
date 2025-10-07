@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Line } from 'react-chartjs-2';
 import { api } from '../services/api';
-import { realtimeWs } from '../services/websocket';
+import { realtimeTradingWs } from '../services/websocket';
 import {
   TrendingUp,
   TrendingDown,
@@ -84,7 +84,7 @@ const AdvancedTradingChart: React.FC<AdvancedTradingChartProps> = ({
     const interval = setInterval(fetchChartData, 60000);
     return () => {
       clearInterval(interval);
-      realtimeWs.disconnect();
+      realtimeTradingWs.disconnect();
     };
   }, [symbol, timeframe]);
 
@@ -104,13 +104,13 @@ const AdvancedTradingChart: React.FC<AdvancedTradingChartProps> = ({
   };
 
   const connectWebSocket = () => {
-    realtimeWs.connect();
+    realtimeTradingWs.connect();
     
-    realtimeWs.onStateChange((state) => {
+    realtimeTradingWs.onStateChange((state) => {
       setIsConnected(state === 'connected');
     });
 
-    realtimeWs.onMessage((event) => {
+    realtimeTradingWs.onMessage((event) => {
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'candle' && message.symbol === symbol) {
