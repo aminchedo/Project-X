@@ -1,173 +1,162 @@
 import React, { useState } from 'react';
-import { Download, FileText, Share2, Clipboard, Check } from 'lucide-react';
-import { ScanResult } from '../../types';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Download, FileText, Table, Image, ChevronDown } from 'lucide-react';
 
 interface ExportMenuProps {
-  results: ScanResult[];
+  data: any[];
+  onExport?: (format: 'csv' | 'json' | 'pdf') => void;
 }
 
-const ExportMenu: React.FC<ExportMenuProps> = ({ results }) => {
-  const [showMenu, setShowMenu] = useState(false);
-  const [copied, setCopied] = useState(false);
+const ExportMenu: React.FC<ExportMenuProps> = ({ data, onExport }) => {
+  const [isOpen, setIsOpen] = useState(false);
 
-  const getScore = (result: ScanResult): number => {
-    return result.overall_score ?? result.final_score ?? result.score ?? 0;
+  const handleExport = (format: 'csv' | 'json' | 'pdf') => {
+    if (onExport) {
+      onExport(format);
+    } else {
+      // Default export implementation
+      exportData(format);
+    }
+    setIsOpen(false);
   };
 
-  const getDirection = (result: ScanResult): string => {
-    return result.overall_direction ?? result.direction ?? 'NEUTRAL';
+  const exportData = (format: 'csv' | 'json' | 'pdf') => {
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `scan-results-${timestamp}`;
+
+    switch (format) {
+      case 'csv':
+        exportCSV(filename);
+        break;
+      case 'json':
+        exportJSON(filename);
+        break;
+      case 'pdf':
+        alert('PDF export coming soon!');
+        break;
+    }
   };
 
-  const handleExportCSV = () => {
-    const headers = ['نماد', 'امتیاز', 'جهت', 'تعداد بازه‌های زمانی', 'بازه‌ها'];
-    const rows = results.map(r => [
-      r.symbol,
-      getScore(r).toFixed(2),
-      getDirection(r),
-      r.tf_count || 0,
-      (r.timeframes || []).join('; '),
-    ]);
+  const exportCSV = (filename: string) => {
+    if (data.length === 0) return;
 
-    const csv = [
-      headers.join(','),
-      ...rows.map(row => row.join(','))
-    ].join('\n');
+    const headers = Object.keys(data[0]).join(',');
+    const rows = data.map(row => Object.values(row).join(',')).join('\n');
+    const csv = `${headers}\n${rows}`;
 
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `scanner-results-${Date.now()}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setShowMenu(false);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
-  const handleExportJSON = () => {
-    const data = results.map(r => ({
-      symbol: r.symbol,
-      score: getScore(r),
-      direction: getDirection(r),
-      timeframes: r.timeframes || [],
-      tf_count: r.tf_count || 0,
-      sample_components: r.sample_components,
-    }));
-
+  const exportJSON = (filename: string) => {
     const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `scanner-results-${Date.now()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setShowMenu(false);
-  };
-
-  const handleCopyToClipboard = async () => {
-    const text = results
-      .map(r => `${r.symbol}: ${(getScore(r) * 100).toFixed(0)}% - ${getDirection(r)}`)
-      .join('\n');
-
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      console.error('Failed to copy:', error);
-    }
-    setShowMenu(false);
-  };
-
-  const handleShare = async () => {
-    // Create a shareable summary
-    const summary = `🔍 نتایج اسکن بازار\n\n` +
-      results.slice(0, 5).map(r => 
-        `${r.symbol}: ${(getScore(r) * 100).toFixed(0)}% - ${getDirection(r)}`
-      ).join('\n') +
-      (results.length > 5 ? `\n\n... و ${results.length - 5} نماد دیگر` : '');
-
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'نتایج اسکن بازار',
-          text: summary,
-        });
-      } catch (error) {
-        // User cancelled or error occurred
-        console.log('Share cancelled or failed');
-      }
-    } else {
-      // Fallback: copy to clipboard
-      await handleCopyToClipboard();
-    }
-    setShowMenu(false);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename}.json`;
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   return (
     <div className="relative">
-      <button
-        onClick={() => setShowMenu(!showMenu)}
-        disabled={results.length === 0}
-        className="flex items-center gap-2 px-4 py-2 bg-slate-700/70 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+      <motion.button
+        onClick={() => setIsOpen(!isOpen)}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        disabled={data.length === 0}
+        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+          data.length === 0
+            ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+            : 'bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white shadow-lg shadow-purple-500/20'
+        }`}
       >
         <Download className="w-4 h-4" />
-        <span>خروجی</span>
-      </button>
+        <span>Export</span>
+        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </motion.button>
 
-      {showMenu && (
-        <div className="absolute left-0 top-full mt-2 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl z-20 overflow-hidden">
-          <button
-            onClick={handleExportCSV}
-            className="w-full px-4 py-3 text-right hover:bg-slate-700/50 text-slate-300 transition-colors flex items-center gap-3 border-b border-slate-700"
-          >
-            <FileText className="w-4 h-4 text-emerald-400" />
-            <div className="flex-1">
-              <div className="font-medium">خروجی CSV</div>
-              <div className="text-xs text-slate-400">برای Excel و Google Sheets</div>
-            </div>
-          </button>
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              className="fixed inset-0 z-10"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsOpen(false)}
+            />
 
-          <button
-            onClick={handleExportJSON}
-            className="w-full px-4 py-3 text-right hover:bg-slate-700/50 text-slate-300 transition-colors flex items-center gap-3 border-b border-slate-700"
-          >
-            <FileText className="w-4 h-4 text-cyan-400" />
-            <div className="flex-1">
-              <div className="font-medium">خروجی JSON</div>
-              <div className="text-xs text-slate-400">فرمت داده ساختاریافته</div>
-            </div>
-          </button>
+            {/* Dropdown Menu */}
+            <motion.div
+              className="absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-20"
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="p-2">
+                <div className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Export Format
+                </div>
 
-          <button
-            onClick={handleCopyToClipboard}
-            className="w-full px-4 py-3 text-right hover:bg-slate-700/50 text-slate-300 transition-colors flex items-center gap-3 border-b border-slate-700"
-          >
-            {copied ? (
-              <Check className="w-4 h-4 text-green-400" />
-            ) : (
-              <Clipboard className="w-4 h-4 text-blue-400" />
-            )}
-            <div className="flex-1">
-              <div className="font-medium">
-                {copied ? 'کپی شد!' : 'کپی متن'}
+                {/* CSV Export */}
+                <motion.button
+                  onClick={() => handleExport('csv')}
+                  whileHover={{ x: 4 }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-slate-50 transition-all group"
+                >
+                  <Table className="w-5 h-5 text-green-400 group-hover:scale-110 transition-transform" />
+                  <div className="text-left flex-1">
+                    <div className="font-medium">CSV</div>
+                    <div className="text-xs text-slate-500">Spreadsheet format</div>
+                  </div>
+                </motion.button>
+
+                {/* JSON Export */}
+                <motion.button
+                  onClick={() => handleExport('json')}
+                  whileHover={{ x: 4 }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-slate-50 transition-all group"
+                >
+                  <FileText className="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform" />
+                  <div className="text-left flex-1">
+                    <div className="font-medium">JSON</div>
+                    <div className="text-xs text-slate-500">Data interchange</div>
+                  </div>
+                </motion.button>
+
+                {/* PDF Export */}
+                <motion.button
+                  onClick={() => handleExport('pdf')}
+                  whileHover={{ x: 4 }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-slate-50 transition-all group"
+                >
+                  <Image className="w-5 h-5 text-purple-400 group-hover:scale-110 transition-transform" />
+                  <div className="text-left flex-1">
+                    <div className="font-medium">PDF</div>
+                    <div className="text-xs text-slate-500">Document format</div>
+                  </div>
+                </motion.button>
               </div>
-              <div className="text-xs text-slate-400">کپی به کلیپ‌بورد</div>
-            </div>
-          </button>
 
-          <button
-            onClick={handleShare}
-            className="w-full px-4 py-3 text-right hover:bg-slate-700/50 text-slate-300 transition-colors flex items-center gap-3"
-          >
-            <Share2 className="w-4 h-4 text-purple-400" />
-            <div className="flex-1">
-              <div className="font-medium">اشتراک‌گذاری</div>
-              <div className="text-xs text-slate-400">ارسال به دیگران</div>
-            </div>
-          </button>
-        </div>
-      )}
+              {/* Footer */}
+              <div className="px-3 py-2 bg-slate-800/50 border-t border-slate-700">
+                <div className="text-xs text-slate-500">
+                  {data.length} {data.length === 1 ? 'result' : 'results'} to export
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -1,5 +1,6 @@
-import React from 'react';
-import { TrendingUp, CheckSquare, Square } from 'lucide-react';
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { TrendingUp, TrendingDown, ArrowUpDown, CheckSquare, Square, Eye } from 'lucide-react';
 import { ScanResult } from '../../types';
 import ScoreGauge from '../showcase/ScoreGauge';
 import DirectionPill from '../showcase/DirectionPill';
@@ -8,13 +9,18 @@ interface ResultsTableProps {
   results: ScanResult[];
   selectedSymbols: Set<string>;
   onToggleSelection: (symbol: string) => void;
+  onViewDetails?: (symbol: string) => void;
 }
 
 const ResultsTable: React.FC<ResultsTableProps> = ({ 
   results, 
   selectedSymbols,
-  onToggleSelection 
+  onToggleSelection,
+  onViewDetails
 }) => {
+  const [sortBy, setSortBy] = useState<string>('score');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
   // Helper to extract score
   const getScore = (result: ScanResult): number => {
     return result.overall_score ?? result.final_score ?? result.score ?? 0;
@@ -38,187 +44,222 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
       const active = components.filter((c: any) => c.score > 0.5).length;
       return { active, total };
     }
-    return { active: 0, total: 9 }; // Default: assume 9 detectors
+    return { active: 0, total: 9 };
   };
 
+  // Sorting logic
+  const handleSort = (key: string) => {
+    if (sortBy === key) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(key);
+      setSortOrder('desc');
+    }
+  };
+
+  const sortedResults = [...results].sort((a, b) => {
+    let aVal: any, bVal: any;
+
+    switch (sortBy) {
+      case 'score':
+        aVal = getScore(a);
+        bVal = getScore(b);
+        break;
+      case 'symbol':
+        aVal = a.symbol;
+        bVal = b.symbol;
+        break;
+      case 'timeframes':
+        aVal = getTfCount(a);
+        bVal = getTfCount(b);
+        break;
+      default:
+        aVal = getScore(a);
+        bVal = getScore(b);
+    }
+
+    const order = sortOrder === 'asc' ? 1 : -1;
+    return aVal > bVal ? order : -order;
+  });
+
   return (
-    <div className="overflow-x-auto -mx-6 px-6">
-      <table className="w-full min-w-[800px]">
-        <thead>
-          <tr className="border-b border-slate-700/50">
-            <th className="text-right py-4 px-4 text-slate-400 font-semibold text-sm w-10">
-              {/* Selection column */}
-            </th>
-            <th className="text-right py-4 px-4 text-slate-400 font-semibold text-sm">
-              نماد
-            </th>
-            <th className="text-center py-4 px-4 text-slate-400 font-semibold text-sm">
-              امتیاز نهایی
-            </th>
-            <th className="text-center py-4 px-4 text-slate-400 font-semibold text-sm">
-              جهت
-            </th>
-            <th className="text-center py-4 px-4 text-slate-400 font-semibold text-sm">
-              سیگنال‌ها
-            </th>
-            <th className="text-center py-4 px-4 text-slate-400 font-semibold text-sm">
-              بازه‌های زمانی
-            </th>
-            <th className="text-center py-4 px-4 text-slate-400 font-semibold text-sm">
-              عملیات
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {results.map((result, index) => {
-            const score = getScore(result);
-            const direction = getDirection(result);
-            const tfCount = getTfCount(result);
-            const signalCount = getSignalCount(result);
-            const isSelected = selectedSymbols.has(result.symbol);
-
-            return (
-              <tr
-                key={`${result.symbol}-${index}`}
-                className={`
-                  border-b border-slate-800/50 transition-all duration-200 group
-                  hover:bg-slate-700/30 hover:scale-[1.01] hover:shadow-lg cursor-pointer
-                  ${isSelected ? 'bg-purple-500/10' : ''}
-                `}
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    // Navigate to details (implement later)
-                    console.log('Open details for', result.symbol);
-                  }
-                }}
+    <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[800px]">
+          <thead>
+            <tr className="bg-slate-800 border-b border-slate-700">
+              {/* Selection Column */}
+              <th className="text-left py-4 px-4 text-slate-300 font-semibold text-sm w-12">
+                <CheckSquare className="w-5 h-5 text-slate-400" />
+              </th>
+              
+              {/* Symbol Column */}
+              <th 
+                className="text-left py-4 px-4 text-slate-300 font-semibold text-sm cursor-pointer hover:text-slate-50 transition-colors group"
+                onClick={() => handleSort('symbol')}
               >
-                {/* Selection Checkbox */}
-                <td className="py-4 px-4">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleSelection(result.symbol);
-                    }}
-                    className="p-1 hover:bg-slate-600/50 rounded transition-colors"
-                    aria-label={`انتخاب ${result.symbol}`}
-                  >
-                    {isSelected ? (
-                      <CheckSquare className="w-5 h-5 text-purple-400" />
-                    ) : (
-                      <Square className="w-5 h-5 text-slate-500 group-hover:text-slate-400" />
-                    )}
-                  </button>
-                </td>
+                <div className="flex items-center gap-2">
+                  Symbol
+                  <ArrowUpDown className={`w-4 h-4 ${sortBy === 'symbol' ? 'text-cyan-400' : 'text-slate-500 group-hover:text-slate-400'}`} />
+                </div>
+              </th>
+              
+              {/* Score Column */}
+              <th 
+                className="text-center py-4 px-4 text-slate-300 font-semibold text-sm cursor-pointer hover:text-slate-50 transition-colors group"
+                onClick={() => handleSort('score')}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  Score
+                  <ArrowUpDown className={`w-4 h-4 ${sortBy === 'score' ? 'text-cyan-400' : 'text-slate-500 group-hover:text-slate-400'}`} />
+                </div>
+              </th>
+              
+              {/* Direction Column */}
+              <th className="text-center py-4 px-4 text-slate-300 font-semibold text-sm">
+                Direction
+              </th>
+              
+              {/* Signals Column */}
+              <th className="text-center py-4 px-4 text-slate-300 font-semibold text-sm">
+                Signals
+              </th>
+              
+              {/* Timeframes Column */}
+              <th 
+                className="text-center py-4 px-4 text-slate-300 font-semibold text-sm cursor-pointer hover:text-slate-50 transition-colors group"
+                onClick={() => handleSort('timeframes')}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  Timeframes
+                  <ArrowUpDown className={`w-4 h-4 ${sortBy === 'timeframes' ? 'text-cyan-400' : 'text-slate-500 group-hover:text-slate-400'}`} />
+                </div>
+              </th>
+              
+              {/* Actions Column */}
+              <th className="text-center py-4 px-4 text-slate-300 font-semibold text-sm">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedResults.map((result, index) => {
+              const score = getScore(result);
+              const direction = getDirection(result);
+              const tfCount = getTfCount(result);
+              const signalCount = getSignalCount(result);
+              const isSelected = selectedSymbols.has(result.symbol);
 
-                {/* Symbol */}
-                <td className="py-4 px-4">
-                  <div className="flex items-center gap-2">
-                    <div className="font-bold text-white text-lg">
-                      {result.symbol}
+              return (
+                <motion.tr
+                  key={result.symbol}
+                  className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors group"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.03 }}
+                >
+                  {/* Selection Checkbox */}
+                  <td className="py-4 px-4">
+                    <motion.button
+                      onClick={() => onToggleSelection(result.symbol)}
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      className="text-slate-400 hover:text-cyan-400 transition-colors"
+                    >
+                      {isSelected ? (
+                        <CheckSquare className="w-5 h-5 text-cyan-400" />
+                      ) : (
+                        <Square className="w-5 h-5" />
+                      )}
+                    </motion.button>
+                  </td>
+                  
+                  {/* Symbol */}
+                  <td className="py-4 px-4">
+                    <div className="font-bold text-slate-50 text-lg">{result.symbol}</div>
+                  </td>
+                  
+                  {/* Score Gauge */}
+                  <td className="py-4 px-4">
+                    <div className="flex justify-center">
+                      <ScoreGauge score={score} size="md" />
                     </div>
-                  </div>
-                </td>
-
-                {/* Score Gauge with Enhanced Visual */}
-                <td className="py-4 px-4">
-                  <div className="flex flex-col items-center gap-2">
-                    <ScoreGauge score={score} size="sm" showLabel={false} />
-                    <div className="flex items-center gap-1">
-                      <div 
-                        className="h-2 rounded-full overflow-hidden bg-slate-700/50"
-                        style={{ width: '100px' }}
-                      >
-                        <div
-                          className={`h-full transition-all duration-700 ease-out ${
-                            score < 0.3 ? 'bg-gradient-to-r from-red-500 to-red-600' :
-                            score < 0.7 ? 'bg-gradient-to-r from-amber-500 to-amber-600' :
-                            'bg-gradient-to-r from-emerald-500 to-emerald-600'
-                          }`}
-                          style={{ width: `${score * 100}%` }}
+                  </td>
+                  
+                  {/* Direction Pill */}
+                  <td className="py-4 px-4">
+                    <div className="flex justify-center">
+                      <DirectionPill direction={direction} />
+                    </div>
+                  </td>
+                  
+                  {/* Signals Count */}
+                  <td className="py-4 px-4">
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="text-slate-50 font-semibold">
+                        {signalCount.active}/{signalCount.total}
+                      </span>
+                      <div className="w-full max-w-[80px] bg-slate-700/50 rounded-full h-1.5">
+                        <motion.div
+                          className="bg-gradient-to-r from-cyan-500 to-blue-600 h-1.5 rounded-full"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${(signalCount.active / signalCount.total) * 100}%` }}
+                          transition={{ duration: 0.8, ease: "easeOut" }}
                         />
                       </div>
-                      <span className="text-xs font-mono text-slate-400">
-                        {(score * 100).toFixed(0)}%
+                    </div>
+                  </td>
+                  
+                  {/* Timeframes */}
+                  <td className="py-4 px-4">
+                    <div className="flex justify-center">
+                      <span className="px-3 py-1 rounded-full text-sm font-semibold bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                        {tfCount} TF
                       </span>
                     </div>
-                  </div>
-                </td>
-
-                {/* Direction with Pulse Animation */}
-                <td className="py-4 px-4">
-                  <div className="flex justify-center">
-                    <div className={score > 0.8 ? 'animate-pulse' : ''}>
-                      <DirectionPill direction={direction} size="sm" />
-                    </div>
-                  </div>
-                </td>
-
-                {/* Signal Count */}
-                <td className="py-4 px-4">
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="text-slate-300 font-mono font-semibold">
-                      {signalCount.active}/{signalCount.total}
-                    </span>
-                    <div className="flex gap-0.5">
-                      {Array.from({ length: signalCount.total }).map((_, i) => (
-                        <div
-                          key={i}
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            i < signalCount.active 
-                              ? 'bg-emerald-500' 
-                              : 'bg-slate-700'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </td>
-
-                {/* Timeframe Badges */}
-                <td className="py-4 px-4">
-                  <div className="flex justify-center gap-1 flex-wrap">
-                    {result.timeframes?.slice(0, 4).map((tf) => (
-                      <span
-                        key={tf}
-                        className={`
-                          px-2 py-1 rounded text-xs font-mono font-semibold border
-                          ${direction === 'BULLISH' 
-                            ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300'
-                            : direction === 'BEARISH'
-                            ? 'bg-red-500/20 border-red-500/30 text-red-300'
-                            : 'bg-slate-600/20 border-slate-500/30 text-slate-400'
-                          }
-                        `}
+                  </td>
+                  
+                  {/* Actions */}
+                  <td className="py-4 px-4">
+                    <div className="flex justify-center gap-2">
+                      <motion.button
+                        onClick={() => onViewDetails?.(result.symbol)}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-cyan-500/20"
                       >
-                        {tf}
-                      </span>
-                    ))}
-                    {tfCount > 4 && (
-                      <span className="px-2 py-1 text-xs text-slate-400">
-                        +{tfCount - 4}
-                      </span>
-                    )}
-                  </div>
-                </td>
+                        <Eye className="w-4 h-4" />
+                        View
+                      </motion.button>
+                    </div>
+                  </td>
+                </motion.tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-                {/* Actions */}
-                <td className="py-4 px-4">
-                  <div className="flex justify-center">
-                    <button
-                      onClick={() => console.log('Open details for', result.symbol)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/30 rounded-lg text-sm font-medium transition-all hover:scale-105"
-                    >
-                      <TrendingUp className="w-4 h-4" />
-                      <span>جزئیات</span>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      {/* Footer with stats */}
+      <motion.div 
+        className="bg-slate-800/50 px-6 py-4 border-t border-slate-700 flex items-center justify-between"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.3 }}
+      >
+        <div className="flex items-center gap-6">
+          <div className="text-sm text-slate-400">
+            Total Results: <span className="font-semibold text-slate-50">{results.length}</span>
+          </div>
+          <div className="text-sm text-slate-400">
+            Selected: <span className="font-semibold text-cyan-400">{selectedSymbols.size}</span>
+          </div>
+        </div>
+        
+        <div className="text-xs text-slate-500">
+          Click headers to sort • Click rows to view details
+        </div>
+      </motion.div>
     </div>
   );
 };
