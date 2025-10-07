@@ -1,484 +1,368 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Activity, 
-  Target, 
-  Clock, 
-  DollarSign,
-  BarChart3,
+import { motion, AnimatePresence } from 'framer-motion';
+import { api } from '../services/api';
+import { realtimeWs } from '../services/websocket';
+import {
+  Activity,
+  TrendingUp,
+  TrendingDown,
+  Target,
   AlertTriangle,
-  CheckCircle,
-  XCircle,
-  Eye,
-  EyeOff
+  Clock,
+  DollarSign,
+  Percent,
+  RefreshCw,
+  X
 } from 'lucide-react';
 
-interface SignalPosition {
+interface Position {
   id: string;
+  signal_id: string;
   symbol: string;
-  side: 'long' | 'short';
-  entryPrice: number;
-  currentPrice: number;
+  type: 'long' | 'short';
+  entry_price: number;
+  current_price: number;
+  target_price: number;
+  stop_loss: number;
   quantity: number;
-  unrealizedPnl: number;
-  unrealizedPnlPercent: number;
-  timestamp: number;
-  confidence: number;
-  status: 'active' | 'closed' | 'pending';
-  stopLoss?: number;
-  takeProfit?: number;
-  riskScore: number;
-}
-
-interface SignalAlert {
-  id: string;
-  symbol: string;
-  type: 'entry' | 'exit' | 'stop_loss' | 'take_profit';
-  message: string;
-  timestamp: number;
-  severity: 'low' | 'medium' | 'high';
-  price: number;
-  side: 'long' | 'short';
+  pnl: number;
+  pnl_percent: number;
+  status: 'active' | 'winning' | 'losing' | 'near_target' | 'near_stop';
+  opened_at: string;
+  duration: string;
 }
 
 const RealTimeSignalPositions: React.FC = () => {
-  const [positions, setPositions] = useState<SignalPosition[]>([]);
-  const [alerts, setAlerts] = useState<SignalAlert[]>([]);
-  const [totalPnl, setTotalPnl] = useState<number>(0);
-  const [activePositions, setActivePositions] = useState<number>(0);
-  const [showClosed, setShowClosed] = useState<boolean>(false);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'winning' | 'losing'>('all');
 
   useEffect(() => {
-    generateMockPositions();
-    
-    // Real-time position updates every 2 seconds
-    const positionInterval = setInterval(() => {
-      updatePositions();
-    }, 2000);
+    fetchPositions();
+    connectWebSocket();
 
-    // Alert updates every 3 seconds
-    const alertInterval = setInterval(() => {
-      updateAlerts();
-    }, 3000);
-
-    // PnL updates every 1 second
-    const pnlInterval = setInterval(() => {
-      updatePnL();
-    }, 1000);
-
+    const interval = setInterval(fetchPositions, 10000);
     return () => {
-      clearInterval(positionInterval);
-      clearInterval(alertInterval);
-      clearInterval(pnlInterval);
+      clearInterval(interval);
+      realtimeWs.disconnect();
     };
   }, []);
 
-  const generateMockPositions = () => {
-    const mockPositions: SignalPosition[] = [
-      {
-        id: '1',
-        symbol: 'BTCUSDT',
-        side: 'long',
-        entryPrice: 43250.50,
-        currentPrice: 43800.25,
-        quantity: 0.5,
-        unrealizedPnl: 274.88,
-        unrealizedPnlPercent: 1.27,
-        timestamp: Date.now() - 3600000,
-        confidence: 0.85,
-        status: 'active',
-        stopLoss: 42000,
-        takeProfit: 45000,
-        riskScore: 6.5
-      },
-      {
-        id: '2',
-        symbol: 'ETHUSDT',
-        side: 'short',
-        entryPrice: 2650.75,
-        currentPrice: 2620.30,
-        quantity: 2.0,
-        unrealizedPnl: 60.90,
-        unrealizedPnlPercent: 1.15,
-        timestamp: Date.now() - 7200000,
-        confidence: 0.78,
-        status: 'active',
-        stopLoss: 2700,
-        takeProfit: 2550,
-        riskScore: 4.2
-      },
-      {
-        id: '3',
-        symbol: 'SOLUSDT',
-        side: 'long',
-        entryPrice: 98.45,
-        currentPrice: 95.20,
-        quantity: 10.0,
-        unrealizedPnl: -32.50,
-        unrealizedPnlPercent: -3.30,
-        timestamp: Date.now() - 1800000,
-        confidence: 0.72,
-        status: 'active',
-        stopLoss: 92.00,
-        takeProfit: 105.00,
-        riskScore: 7.8
-      },
-      {
-        id: '4',
-        symbol: 'ADAUSDT',
-        side: 'long',
-        entryPrice: 0.4850,
-        currentPrice: 0.4920,
-        quantity: 1000.0,
-        unrealizedPnl: 70.00,
-        unrealizedPnlPercent: 1.44,
-        timestamp: Date.now() - 900000,
-        confidence: 0.68,
-        status: 'active',
-        stopLoss: 0.4700,
-        takeProfit: 0.5100,
-        riskScore: 5.1
-      }
-    ];
-
-    setPositions(mockPositions);
-    setActivePositions(mockPositions.filter(p => p.status === 'active').length);
-    setTotalPnl(mockPositions.reduce((sum, p) => sum + p.unrealizedPnl, 0));
+  const fetchPositions = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await api.trading.getActivePositions();
+      setPositions(response || []);
+    } catch (err) {
+      setError('Failed to load positions');
+      console.error('Positions error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const updatePositions = () => {
-    setPositions(prev => prev.map(position => {
-      if (position.status !== 'active') return position;
+  const connectWebSocket = () => {
+    realtimeWs.connect();
+    
+    realtimeWs.onStateChange((state) => {
+      setIsConnected(state === 'connected');
+    });
 
-      // Simulate price movement
-      const priceChange = (Math.random() - 0.5) * position.currentPrice * 0.02;
-      const newPrice = Math.max(0.01, position.currentPrice + priceChange);
-      
-      // Calculate new PnL
-      const priceDiff = position.side === 'long' 
-        ? newPrice - position.entryPrice 
-        : position.entryPrice - newPrice;
-      const newPnl = priceDiff * position.quantity;
-      const newPnlPercent = (priceDiff / position.entryPrice) * 100;
-
-      // Update risk score based on PnL
-      const newRiskScore = Math.max(0, Math.min(10, 
-        position.riskScore + (Math.random() - 0.5) * 0.5
-      ));
-
-      return {
-        ...position,
-        currentPrice: newPrice,
-        unrealizedPnl: newPnl,
-        unrealizedPnlPercent: newPnlPercent,
-        riskScore: newRiskScore
-      };
-    }));
-
-    // Update totals
-    setPositions(current => {
-      const active = current.filter(p => p.status === 'active');
-      setActivePositions(active.length);
-      setTotalPnl(active.reduce((sum, p) => sum + p.unrealizedPnl, 0));
-      return current;
+    realtimeWs.onMessage((event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'position_update') {
+          setPositions(prev => 
+            prev.map(p => p.id === message.data.id ? message.data : p)
+          );
+        }
+      } catch (err) {
+        console.error('WebSocket message error:', err);
+      }
     });
   };
 
-  const updateAlerts = () => {
-    // Occasionally add new alerts
-    if (Math.random() > 0.7) {
-      const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'ADAUSDT'];
-      const types = ['entry', 'exit', 'stop_loss', 'take_profit'];
-      const severities = ['low', 'medium', 'high'];
-      const sides = ['long', 'short'];
-
-      const newAlert: SignalAlert = {
-        id: Date.now().toString(),
-        symbol: symbols[Math.floor(Math.random() * symbols.length)],
-        type: types[Math.floor(Math.random() * types.length)] as any,
-        message: `Signal alert for ${symbols[Math.floor(Math.random() * symbols.length)]}`,
-        timestamp: Date.now(),
-        severity: severities[Math.floor(Math.random() * severities.length)] as any,
-        price: Math.random() * 50000,
-        side: sides[Math.floor(Math.random() * sides.length)] as any
-      };
-
-      setAlerts(prev => [newAlert, ...prev].slice(0, 15)); // Keep last 15 alerts
-    }
-  };
-
-  const updatePnL = () => {
-    setTotalPnl(prev => prev + (Math.random() - 0.5) * 50);
-  };
-
-  const getPnlColor = (pnl: number) => {
-    if (pnl > 0) return 'text-green-400';
-    if (pnl < 0) return 'text-red-400';
-    return 'text-gray-400';
-  };
-
-  const getRiskColor = (score: number) => {
-    if (score <= 3) return 'text-green-400';
-    if (score <= 6) return 'text-yellow-400';
-    if (score <= 8) return 'text-orange-400';
-    return 'text-red-400';
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'text-green-400';
-      case 'closed': return 'text-gray-400';
-      case 'pending': return 'text-yellow-400';
-      default: return 'text-gray-400';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'active': return <CheckCircle className="w-4 h-4" />;
-      case 'closed': return <XCircle className="w-4 h-4" />;
-      case 'pending': return <Clock className="w-4 h-4" />;
-      default: return <Clock className="w-4 h-4" />;
-    }
-  };
-
-  const formatTime = (timestamp: number) => {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(minutes / 60);
+  const handleClosePosition = async (positionId: string) => {
+    if (!confirm('Close this position?')) return;
     
-    if (hours > 0) return `${hours}h ${minutes % 60}m ago`;
-    return `${minutes}m ago`;
+    try {
+      await api.trading.closePosition(positionId);
+      setPositions(positions.filter(p => p.id !== positionId));
+    } catch (err) {
+      console.error('Close position error:', err);
+    }
   };
 
-  const filteredPositions = showClosed 
-    ? positions 
-    : positions.filter(p => p.status === 'active');
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case 'winning':
+        return { bg: 'bg-green-500/20', border: 'border-green-500/50', text: 'text-green-400', label: 'Winning' };
+      case 'losing':
+        return { bg: 'bg-red-500/20', border: 'border-red-500/50', text: 'text-red-400', label: 'Losing' };
+      case 'near_target':
+        return { bg: 'bg-cyan-500/20', border: 'border-cyan-500/50', text: 'text-cyan-400', label: 'Near Target' };
+      case 'near_stop':
+        return { bg: 'bg-orange-500/20', border: 'border-orange-500/50', text: 'text-orange-400', label: 'Near Stop' };
+      default:
+        return { bg: 'bg-slate-500/20', border: 'border-slate-500/50', text: 'text-slate-400', label: 'Active' };
+    }
+  };
+
+  const filteredPositions = positions.filter(p => {
+    if (filter === 'winning') return p.pnl > 0;
+    if (filter === 'losing') return p.pnl < 0;
+    return true;
+  });
+
+  const totalPnL = positions.reduce((sum, p) => sum + p.pnl, 0);
+  const totalValue = positions.reduce((sum, p) => sum + (p.quantity * p.current_price), 0);
+  const winningCount = positions.filter(p => p.pnl > 0).length;
 
   return (
-    <div className="space-y-4 lg:space-y-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          <Target className="w-6 h-6 sm:w-8 sm:h-8 text-green-400" />
-          <h2 className="text-xl sm:text-2xl font-bold text-white">Signal Positions</h2>
-          <div className="flex items-center space-x-2 text-xs sm:text-sm text-gray-400">
-            <Activity className="w-3 h-3 sm:w-4 sm:h-4 animate-pulse" />
-            <span>Real-time</span>
+      <motion.div 
+        className="flex items-center justify-between flex-wrap gap-4"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600">
+            <Activity className="w-6 h-6 text-white" />
           </div>
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-4 sm:gap-6">
-          <div className="text-center">
-            <div className="text-xs sm:text-sm text-gray-400">Total P&L</div>
-            <div className={`text-lg sm:text-2xl font-bold ${getPnlColor(totalPnl)}`}>
-              ${totalPnl.toFixed(2)}
+          <div>
+            <h2 className="text-2xl font-bold text-slate-50">Active Positions</h2>
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
+              <p className="text-sm text-slate-400">
+                {isConnected ? 'Real-time updates' : 'Disconnected'} • {positions.length} open
+              </p>
             </div>
           </div>
-          <div className="text-center">
-            <div className="text-xs sm:text-sm text-gray-400">Active Positions</div>
-            <div className="text-lg sm:text-2xl font-bold text-blue-400">
-              {activePositions}
-            </div>
-          </div>
-          <button
-            onClick={() => setShowClosed(!showClosed)}
-            className="flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            {showClosed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            <span className="text-sm">{showClosed ? 'Hide Closed' : 'Show Closed'}</span>
-          </button>
         </div>
-      </div>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-gray-800 rounded-lg p-3 sm:p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs sm:text-sm text-gray-400">Total P&L</div>
-              <div className={`text-lg sm:text-xl font-bold ${getPnlColor(totalPnl)}`}>
-                ${totalPnl.toFixed(2)}
-              </div>
-            </div>
-            <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-green-400" />
-          </div>
-        </div>
-        
-        <div className="bg-gray-800 rounded-lg p-3 sm:p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs sm:text-sm text-gray-400">Active Positions</div>
-              <div className="text-lg sm:text-xl font-bold text-blue-400">
-                {activePositions}
-              </div>
-            </div>
-            <BarChart3 className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" />
-          </div>
-        </div>
-        
-        <div className="bg-gray-800 rounded-lg p-3 sm:p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs sm:text-sm text-gray-400">Win Rate</div>
-              <div className="text-lg sm:text-xl font-bold text-green-400">
-                73.5%
-              </div>
-            </div>
-            <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-green-400" />
-          </div>
-        </div>
-        
-        <div className="bg-gray-800 rounded-lg p-3 sm:p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs sm:text-sm text-gray-400">Avg Risk Score</div>
-              <div className="text-lg sm:text-xl font-bold text-yellow-400">
-                5.8
-              </div>
-            </div>
-            <AlertTriangle className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-400" />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6">
-        {/* Positions List */}
-        <div className="xl:col-span-2 space-y-4">
-          <h3 className="text-lg font-semibold flex items-center">
-            <Target className="w-5 h-5 mr-2 text-green-400" />
-            {showClosed ? 'All Positions' : 'Active Positions'}
-          </h3>
-          
-          <div className="space-y-3">
-            {filteredPositions.map((position) => (
-              <div key={position.id} className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-colors">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div className="flex items-center space-x-3">
-                    <div className={`p-2 rounded-lg ${
-                      position.side === 'long' ? 'bg-green-900/30' : 'bg-red-900/30'
-                    }`}>
-                      {position.side === 'long' ? 
-                        <TrendingUp className="w-4 h-4 text-green-400" /> : 
-                        <TrendingDown className="w-4 h-4 text-red-400" />
-                      }
-                    </div>
-                    <div>
-                      <div className="font-semibold text-white">{position.symbol}</div>
-                      <div className="text-sm text-gray-400">
-                        {position.side.toUpperCase()} • {position.quantity} units
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-4">
-                    <div className="text-right">
-                      <div className="text-sm text-gray-400">Entry / Current</div>
-                      <div className="text-sm text-white">
-                        ${position.entryPrice.toFixed(2)} / ${position.currentPrice.toFixed(2)}
-                      </div>
-                    </div>
-                    
-                    <div className="text-right">
-                      <div className="text-sm text-gray-400">P&L</div>
-                      <div className={`font-semibold ${getPnlColor(position.unrealizedPnl)}`}>
-                        ${position.unrealizedPnl.toFixed(2)} ({position.unrealizedPnlPercent.toFixed(2)}%)
-                      </div>
-                    </div>
-                    
-                    <div className="text-right">
-                      <div className="text-sm text-gray-400">Risk</div>
-                      <div className={`font-semibold ${getRiskColor(position.riskScore)}`}>
-                        {position.riskScore.toFixed(1)}
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <div className={`${getStatusColor(position.status)}`}>
-                        {getStatusIcon(position.status)}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {formatTime(position.timestamp)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Progress bars for stop loss and take profit */}
-                <div className="mt-3 space-y-2">
-                  <div className="flex justify-between text-xs text-gray-400">
-                    <span>Stop Loss: ${position.stopLoss?.toFixed(2)}</span>
-                    <span>Take Profit: ${position.takeProfit?.toFixed(2)}</span>
-                  </div>
-                  <div className="flex space-x-2">
-                    <div className="flex-1 bg-gray-700 rounded-full h-1">
-                      <div 
-                        className="bg-red-400 h-1 rounded-full" 
-                        style={{ 
-                          width: position.stopLoss ? 
-                            `${Math.max(0, Math.min(100, ((position.entryPrice - position.stopLoss) / position.entryPrice) * 100))}%` : 
-                            '0%' 
-                        }}
-                      />
-                    </div>
-                    <div className="flex-1 bg-gray-700 rounded-full h-1">
-                      <div 
-                        className="bg-green-400 h-1 rounded-full" 
-                        style={{ 
-                          width: position.takeProfit ? 
-                            `${Math.max(0, Math.min(100, ((position.takeProfit - position.entryPrice) / position.entryPrice) * 100))}%` : 
-                            '0%' 
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
+        <div className="flex gap-2">
+          {/* Filter */}
+          <div className="flex gap-1 bg-slate-800 p-1 rounded-lg">
+            {(['all', 'winning', 'losing'] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all capitalize ${
+                  filter === f
+                    ? 'bg-cyan-500 text-white'
+                    : 'text-slate-400 hover:text-slate-300'
+                }`}
+              >
+                {f}
+              </button>
             ))}
           </div>
-        </div>
 
-        {/* Alerts Panel */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold flex items-center">
-            <AlertTriangle className="w-5 h-5 mr-2 text-yellow-400" />
-            Recent Alerts
-          </h3>
-          
-          <div className="bg-gray-800 rounded-lg p-4 max-h-96 overflow-y-auto">
-            <div className="space-y-3">
-              {alerts.map((alert) => (
-                <div key={alert.id} className="flex items-start space-x-3 p-3 bg-gray-700/50 rounded-lg">
-                  <div className={`p-1 rounded ${
-                    alert.severity === 'high' ? 'bg-red-900/50' :
-                    alert.severity === 'medium' ? 'bg-yellow-900/50' :
-                    'bg-blue-900/50'
-                  }`}>
-                    <AlertTriangle className={`w-3 h-3 ${
-                      alert.severity === 'high' ? 'text-red-400' :
-                      alert.severity === 'medium' ? 'text-yellow-400' :
-                      'text-blue-400'
-                    }`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-white">
-                      {alert.symbol} {alert.type.replace('_', ' ').toUpperCase()}
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      {alert.message}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      ${alert.price.toFixed(2)} • {formatTime(alert.timestamp)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <motion.button
+            onClick={fetchPositions}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            disabled={loading}
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-50 rounded-lg transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </motion.button>
         </div>
+      </motion.div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <motion.div
+          className={`backdrop-blur-xl border shadow-xl rounded-xl p-6 ${
+            totalPnL >= 0 ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'
+          }`}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <DollarSign className={`w-5 h-5 ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`} />
+            <span className="text-sm text-slate-400">Total P&L</span>
+          </div>
+          <p className={`text-3xl font-bold ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {totalPnL >= 0 ? '+' : ''}${totalPnL.toFixed(2)}
+          </p>
+        </motion.div>
+
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Activity className="w-5 h-5 text-cyan-400" />
+            <span className="text-sm text-slate-400">Total Value</span>
+          </div>
+          <p className="text-3xl font-bold text-slate-50">${totalValue.toFixed(2)}</p>
+        </motion.div>
+
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Target className="w-5 h-5 text-purple-400" />
+            <span className="text-sm text-slate-400">Win Rate</span>
+          </div>
+          <p className="text-3xl font-bold text-purple-400">
+            {positions.length > 0 ? ((winningCount / positions.length) * 100).toFixed(0) : 0}%
+          </p>
+        </motion.div>
       </div>
+
+      {/* Positions List */}
+      {filteredPositions.length === 0 ? (
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-12 text-center"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+        >
+          <Activity className="w-16 h-16 mx-auto mb-4 text-slate-600" />
+          <h3 className="text-xl font-semibold text-slate-50 mb-2">No Active Positions</h3>
+          <p className="text-slate-400">
+            {filter !== 'all' ? `No ${filter} positions` : 'Open positions will appear here'}
+          </p>
+        </motion.div>
+      ) : (
+        <div className="space-y-4">
+          <AnimatePresence mode="popLayout">
+            {filteredPositions.map((position, index) => {
+              const statusConfig = getStatusConfig(position.status);
+              const priceDistance = position.type === 'long'
+                ? ((position.current_price - position.entry_price) / position.entry_price) * 100
+                : ((position.entry_price - position.current_price) / position.entry_price) * 100;
+
+              return (
+                <motion.div
+                  key={position.id}
+                  className={`bg-slate-900/80 backdrop-blur-xl border ${statusConfig.border} shadow-xl rounded-xl overflow-hidden`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ delay: index * 0.05 }}
+                  layout
+                >
+                  {/* Header */}
+                  <div className="p-6 border-b border-slate-800">
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-2xl font-bold text-slate-50">{position.symbol}</h3>
+                          <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                            position.type === 'long' 
+                              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                              : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                          }`}>
+                            {position.type.toUpperCase()}
+                          </span>
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border}`}>
+                            {statusConfig.label}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-slate-400">
+                          <div className="flex items-center gap-1">
+                            <Clock size={14} />
+                            <span>{position.duration}</span>
+                          </div>
+                          <span>•</span>
+                          <span>Qty: {position.quantity}</span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleClosePosition(position.id)}
+                        className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                      >
+                        <X className="w-5 h-5 text-red-400" />
+                      </button>
+                    </div>
+
+                    {/* P&L Display */}
+                    <div className={`flex items-center justify-between p-4 rounded-lg ${statusConfig.bg} border ${statusConfig.border}`}>
+                      <div>
+                        <div className="text-sm text-slate-400 mb-1">Unrealized P&L</div>
+                        <div className={`text-3xl font-bold ${position.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {position.pnl >= 0 ? '+' : ''}${position.pnl.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm text-slate-400 mb-1">Return</div>
+                        <div className={`text-2xl font-bold ${position.pnl_percent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {position.pnl_percent >= 0 ? '+' : ''}{position.pnl_percent.toFixed(2)}%
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Price Levels */}
+                  <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <div className="text-sm text-slate-400 mb-1">Entry Price</div>
+                      <div className="text-lg font-bold text-slate-50">${position.entry_price.toFixed(2)}</div>
+                    </div>
+
+                    <div>
+                      <div className="text-sm text-slate-400 mb-1">Current Price</div>
+                      <div className="text-lg font-bold text-cyan-400">${position.current_price.toFixed(2)}</div>
+                      <div className={`text-xs ${priceDistance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {priceDistance >= 0 ? '+' : ''}{priceDistance.toFixed(2)}%
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-sm text-slate-400 mb-1">Target</div>
+                      <div className="text-lg font-bold text-green-400">${position.target_price.toFixed(2)}</div>
+                    </div>
+
+                    <div>
+                      <div className="text-sm text-slate-400 mb-1">Stop Loss</div>
+                      <div className="text-lg font-bold text-red-400">${position.stop_loss.toFixed(2)}</div>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="px-6 pb-6">
+                    <div className="relative h-2 bg-slate-800 rounded-full overflow-hidden">
+                      <div className="absolute inset-0 flex">
+                        <div className="w-1/3 bg-red-500/30"></div>
+                        <div className="w-1/3 bg-slate-700"></div>
+                        <div className="w-1/3 bg-green-500/30"></div>
+                      </div>
+                      <motion.div
+                        className={`absolute top-0 h-full w-1 ${
+                          position.pnl >= 0 ? 'bg-green-500' : 'bg-red-500'
+                        }`}
+                        initial={{ left: '50%' }}
+                        animate={{
+                          left: `${50 + (priceDistance / ((position.target_price - position.stop_loss) / position.entry_price * 100)) * 50}%`
+                        }}
+                        transition={{ duration: 0.5 }}
+                      />
+                    </div>
+                    <div className="flex justify-between mt-2 text-xs text-slate-500">
+                      <span>Stop Loss</span>
+                      <span>Entry</span>
+                      <span>Target</span>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 };

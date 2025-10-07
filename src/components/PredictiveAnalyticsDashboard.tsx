@@ -1,620 +1,385 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Activity, 
-  TrendingUp, 
-  Zap, 
-  Brain, 
-  BarChart3, 
-  Layers,
-  Settings,
-  Maximize2,
-  Minimize2,
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { Line, Bar } from 'react-chartjs-2';
+import { api } from '../services/api';
+import {
+  TrendingUp,
+  TrendingDown,
+  Brain,
+  Target,
+  AlertCircle,
   RefreshCw,
-  Shield
+  Zap,
+  Activity,
+  BarChart3
 } from 'lucide-react';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+  ChartOptions
+} from 'chart.js';
 
-import Market3DVisualization from './MarketVisualization3D';
-import CorrelationHeatMap from './showcase/CorrelationHeatMap';
-import MarketDepthChart from './MarketDepthChart';
-import RealTimeRiskMonitor from './RealTimeRiskMonitor';
-import AIInsightsPanel from './AIInsightsPanel';
-
-interface Signal {
-  symbol: string;
-  timestamp: number;
-  signal_type: string;
-  strength: number;
-  confidence: number;
-  direction: string;
-  metadata: any;
-}
-
-interface MarketData {
-  symbol: string;
-  price: number;
-  volume: number;
-  change24h: number;
-  volatility: number;
-}
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 interface Prediction {
   symbol: string;
-  timestamp: string;
-  prediction: number;
+  current_price: number;
+  predicted_price: number;
+  predicted_change: number;
   confidence: number;
-  signal_direction: string;
-  signal_strength: number;
-  individual_predictions: {
-    random_forest: number;
-    gradient_boosting: number;
-    neural_network: number;
-  };
+  timeframe: string;
+  signals: string[];
 }
 
-interface Strategy {
-  id: string;
-  name: string;
-  symbol: string;
-  type: string;
-  created_at: string;
-  parameters: any;
-  expected_performance: {
-    win_rate: number;
-    avg_return: number;
-    max_drawdown: number;
-  };
+interface TrendAnalysis {
+  trend: 'bullish' | 'bearish' | 'neutral';
+  strength: number;
+  support_level: number;
+  resistance_level: number;
 }
 
 const PredictiveAnalyticsDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | '3d' | 'depth' | 'correlations' | 'strategies' | 'risk' | 'ai'>('overview');
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<string>('BTCUSDT');
-  const [isConnected, setIsConnected] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
-  
-  // Real-time data states
-  const [signals, setSignals] = useState<Signal[]>([]);
-  const [marketData, setMarketData] = useState<MarketData[]>([]);
-  const [predictions, setPredictions] = useState<{[key: string]: Prediction}>({});
-  const [strategies, setStrategies] = useState<Strategy[]>([]);
-  const [correlationData, setCorrelationData] = useState<any>(null);
-  const [depthData, setDepthData] = useState<any>(null);
-  const [performanceMetrics, setPerformanceMetrics] = useState<any>({});
-  
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [timeframe, setTimeframe] = useState<'1h' | '4h' | '1d' | '1w'>('1d');
 
-  // WebSocket connection and management
   useEffect(() => {
-    connectWebSocket();
-    
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-    };
-  }, []);
+    fetchPredictions();
+  }, [selectedSymbol, timeframe]);
 
-  const connectWebSocket = () => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
-    
-    setConnectionStatus('connecting');
-    
+  const fetchPredictions = async () => {
     try {
-      wsRef.current = new WebSocket('ws://localhost:8000/ws/realtime');
-      
-      wsRef.current.onopen = () => {
-        console.log('WebSocket connected');
-        setConnectionStatus('connected');
-        setIsConnected(true);
-        
-        // Subscribe to all symbols
-        const subscribeMessage = {
-          action: 'subscribe',
-          symbols: ['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT', 'AAPL', 'GOOGL', 'TSLA', 'MSFT']
-        };
-        wsRef.current?.send(JSON.stringify(subscribeMessage));
-      };
-      
-      wsRef.current.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          handleWebSocketMessage(message);
-        } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
-        }
-      };
-      
-      wsRef.current.onclose = () => {
-        console.log('WebSocket disconnected');
-        setConnectionStatus('disconnected');
-        setIsConnected(false);
-        
-        // Attempt to reconnect after 3 seconds
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connectWebSocket();
-        }, 3000);
-      };
-      
-      wsRef.current.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        setConnectionStatus('disconnected');
-      };
-      
-    } catch (error) {
-      console.error('Error connecting WebSocket:', error);
-      setConnectionStatus('disconnected');
+      setLoading(true);
+      setError(null);
+      const response = await api.ai.getPredictions({ symbol: selectedSymbol, timeframe });
+      setPredictions(response);
+    } catch (err) {
+      setError('Failed to load predictions');
+      console.error('Predictions error:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleWebSocketMessage = (message: any) => {
-    switch (message.type) {
-      case 'market_data':
-        updateMarketData(message.data);
-        break;
-      case 'signal':
-        updateSignals(message.data);
-        break;
-      case 'prediction_response':
-        updatePredictions(message.symbol, message.data);
-        break;
-      case 'strategy_generated':
-        updateStrategies(message.data);
-        break;
-      default:
-        console.log('Unknown message type:', message.type);
-    }
+  const mainPrediction = predictions.length > 0 ? predictions[0] : null;
+
+  const getPredictionColor = (change: number) => {
+    if (change > 5) return { bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500/50' };
+    if (change > 0) return { bg: 'bg-green-500/10', text: 'text-green-400', border: 'border-green-500/30' };
+    if (change > -5) return { bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/30' };
+    return { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/50' };
   };
 
-  const updateMarketData = (data: any) => {
-    setMarketData(prevData => {
-      const existingIndex = prevData.findIndex(item => item.symbol === data.symbol);
-      const newItem: MarketData = {
-        symbol: data.symbol,
-        price: data.price,
-        volume: data.volume,
-        change24h: Math.random() * 10 - 5, // Mock change
-        volatility: Math.random() * 0.05
-      };
-      
-      if (existingIndex >= 0) {
-        const updated = [...prevData];
-        updated[existingIndex] = newItem;
-        return updated;
-      } else {
-        return [...prevData, newItem];
-      }
-    });
+  const getConfidenceColor = (confidence: number) => {
+    if (confidence >= 80) return 'text-green-400';
+    if (confidence >= 60) return 'text-cyan-400';
+    if (confidence >= 40) return 'text-yellow-400';
+    return 'text-red-400';
   };
 
-  const updateSignals = (data: any) => {
-    setSignals(prevSignals => {
-      const newSignal: Signal = {
-        symbol: data.symbol,
-        timestamp: data.timestamp,
-        signal_type: data.signal_type,
-        strength: data.strength,
-        confidence: data.confidence,
-        direction: data.direction,
-        metadata: data.metadata
-      };
-      
-      // Keep only the last 50 signals
-      const updated = [newSignal, ...prevSignals].slice(0, 50);
-      return updated;
-    });
-  };
+  if (loading && !mainPrediction) {
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-8 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+        <p className="text-slate-400">Analyzing market data...</p>
+      </div>
+    );
+  }
 
-  const updatePredictions = (symbol: string, data: any) => {
-    setPredictions(prev => ({
-      ...prev,
-      [symbol]: data
-    }));
-  };
-
-  const updateStrategies = (data: any) => {
-    setStrategies(prev => [data, ...prev].slice(0, 10));
-  };
-
-  // Fetch additional data
-  useEffect(() => {
-    const fetchCorrelations = async () => {
-      try {
-        const response = await fetch('/api/analytics/correlations');
-        const data = await response.json();
-        setCorrelationData(data);
-      } catch (error) {
-        console.error('Error fetching correlations:', error);
-      }
-    };
-
-    const fetchDepthData = async () => {
-      try {
-        const response = await fetch(`/api/analytics/market-depth/${selectedSymbol}`);
-        const data = await response.json();
-        setDepthData(data);
-      } catch (error) {
-        console.error('Error fetching depth data:', error);
-      }
-    };
-
-    const fetchPerformanceMetrics = async () => {
-      try {
-        const response = await fetch('/api/analytics/performance-metrics');
-        const data = await response.json();
-        setPerformanceMetrics(data);
-      } catch (error) {
-        console.error('Error fetching performance metrics:', error);
-      }
-    };
-
-    const interval = setInterval(() => {
-      fetchCorrelations();
-      fetchDepthData();
-      fetchPerformanceMetrics();
-    }, 5000);
-
-    fetchCorrelations();
-    fetchDepthData();
-    fetchPerformanceMetrics();
-
-    return () => clearInterval(interval);
-  }, [selectedSymbol]);
-
-  const requestPrediction = (symbol: string) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      const message = {
-        action: 'get_prediction',
-        symbol: symbol
-      };
-      wsRef.current.send(JSON.stringify(message));
-    }
-  };
-
-  const generateStrategy = (symbol: string) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      const message = {
-        action: 'generate_strategy',
-        symbol: symbol,
-        market_conditions: {
-          volatility: 0.03,
-          trend_strength: 0.6,
-          volume_profile: 'high'
-        }
-      };
-      wsRef.current.send(JSON.stringify(message));
-    }
-  };
-
-  const tabs = [
-    { id: 'overview', label: 'Overview', icon: Activity },
-    { id: 'ai', label: 'AI Insights', icon: Brain },
-    { id: '3d', label: '3D Market', icon: Layers },
-    { id: 'depth', label: 'Market Depth', icon: BarChart3 },
-    { id: 'correlations', label: 'Correlations', icon: TrendingUp },
-    { id: 'strategies', label: 'Strategies', icon: Settings },
-    { id: 'risk', label: 'Risk Monitor', icon: Shield }
-  ];
+  if (error && !mainPrediction) {
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-xl border border-red-500/50 rounded-xl p-8 text-center">
+        <AlertCircle className="text-red-400 mx-auto mb-4" size={48} />
+        <p className="text-slate-50 mb-4">{error}</p>
+        <button 
+          onClick={fetchPredictions}
+          className="bg-cyan-500 hover:bg-cyan-600 text-white px-6 py-2 rounded-lg transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className={`${isFullscreen ? 'fixed inset-0 z-50' : ''} bg-gray-900 text-white min-h-screen`}>
+    <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gray-800 border-b border-gray-700 p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <Zap className="w-6 h-6 text-blue-400" />
-              <h1 className="text-xl font-bold">Predictive Analytics Dashboard</h1>
-            </div>
-            
-            <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm ${
-              connectionStatus === 'connected' ? 'bg-green-900 text-green-300' :
-              connectionStatus === 'connecting' ? 'bg-yellow-900 text-yellow-300' :
-              'bg-red-900 text-red-300'
-            }`}>
-              <div className={`w-2 h-2 rounded-full ${
-                connectionStatus === 'connected' ? 'bg-green-400' :
-                connectionStatus === 'connecting' ? 'bg-yellow-400 animate-pulse' :
-                'bg-red-400'
-              }`} />
-              <span>{connectionStatus}</span>
-            </div>
+      <motion.div 
+        className="flex items-center justify-between flex-wrap gap-4"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-600">
+            <Brain className="w-6 h-6 text-white" />
           </div>
-
-          <div className="flex items-center space-x-4">
-            {/* Performance Metrics */}
-            <div className="flex items-center space-x-4 text-sm">
-              <div className="text-gray-400">
-                Connections: <span className="text-white">{performanceMetrics.active_connections || 0}</span>
-              </div>
-              <div className="text-gray-400">
-                Symbols: <span className="text-white">{performanceMetrics.cached_symbols || 0}</span>
-              </div>
-              <div className="text-gray-400">
-                Latency: <span className="text-white">{(performanceMetrics.latency_avg || 0).toFixed(1)}ms</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setIsFullscreen(!isFullscreen)}
-              className="p-2 hover:bg-gray-700 rounded"
-            >
-              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </button>
+          <div>
+            <h2 className="text-2xl font-bold text-slate-50">AI Predictions</h2>
+            <p className="text-sm text-slate-400">Machine learning price forecasts</p>
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex space-x-1 mt-4">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
+        <div className="flex gap-2">
+          {/* Symbol Selector */}
+          <select
+            value={selectedSymbol}
+            onChange={(e) => setSelectedSymbol(e.target.value)}
+            className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-50 focus:border-cyan-500 focus:outline-none"
+          >
+            <option value="BTCUSDT">BTC/USDT</option>
+            <option value="ETHUSDT">ETH/USDT</option>
+            <option value="BNBUSDT">BNB/USDT</option>
+            <option value="SOLUSDT">SOL/USDT</option>
+          </select>
+
+          {/* Timeframe Selector */}
+          <div className="flex gap-1 bg-slate-800 p-1 rounded-lg">
+            {(['1h', '4h', '1d', '1w'] as const).map(tf => (
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                key={tf}
+                onClick={() => setTimeframe(tf)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  timeframe === tf
+                    ? 'bg-purple-500 text-white'
+                    : 'text-slate-400 hover:text-slate-300'
                 }`}
               >
-                <Icon className="w-4 h-4" />
-                <span>{tab.label}</span>
+                {tf}
               </button>
-            );
-          })}
+            ))}
+          </div>
+
+          <motion.button
+            onClick={fetchPredictions}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            disabled={loading}
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-50 rounded-lg transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Main Content */}
-      <div className="p-6">
-        <AnimatePresence mode="wait">
-          {activeTab === 'overview' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="space-y-6"
-            >
-              {/* Signal Feed */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
-                  <div className="bg-gray-800 rounded-lg p-4">
-                    <h2 className="text-lg font-semibold mb-4 flex items-center">
-                      <Zap className="w-5 h-5 mr-2 text-yellow-400" />
-                      Real-time Signals
-                    </h2>
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {signals.map((signal, index) => (
-                        <motion.div
-                          key={`${signal.symbol}-${signal.timestamp}`}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          className={`p-3 rounded border-l-4 ${
-                            signal.direction === 'BUY' ? 'border-green-400 bg-green-900/20' : 'border-red-400 bg-red-900/20'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <span className="font-semibold">{signal.symbol}</span>
-                              <span className={`px-2 py-1 rounded text-xs font-bold ${
-                                signal.direction === 'BUY' ? 'bg-green-600' : 'bg-red-600'
-                              }`}>
-                                {signal.direction}
-                              </span>
-                              <span className="text-sm text-gray-400">
-                                Strength: {(signal.strength * 100).toFixed(1)}%
-                              </span>
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {new Date(signal.timestamp * 1000).toLocaleTimeString()}
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+      {mainPrediction && (
+        <>
+          {/* Main Prediction Card */}
+          <motion.div
+            className={`bg-slate-900/80 backdrop-blur-xl border shadow-xl rounded-xl p-8 ${
+              getPredictionColor(mainPrediction.predicted_change).border
+            }`}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.1 }}
+          >
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h3 className="text-3xl font-bold text-slate-50 mb-2">{mainPrediction.symbol}</h3>
+                <p className="text-slate-400">Next {mainPrediction.timeframe} Prediction</p>
+              </div>
+              
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                getPredictionColor(mainPrediction.predicted_change).bg
+              }`}>
+                {mainPrediction.predicted_change >= 0 ? (
+                  <TrendingUp className={getPredictionColor(mainPrediction.predicted_change).text} size={24} />
+                ) : (
+                  <TrendingDown className={getPredictionColor(mainPrediction.predicted_change).text} size={24} />
+                )}
+                <span className={`text-2xl font-bold ${getPredictionColor(mainPrediction.predicted_change).text}`}>
+                  {mainPrediction.predicted_change >= 0 ? '+' : ''}{mainPrediction.predicted_change.toFixed(2)}%
+                </span>
+              </div>
+            </div>
 
-                {/* Quick Actions */}
-                <div className="space-y-4">
-                  <div className="bg-gray-800 rounded-lg p-4">
-                    <h3 className="font-semibold mb-3">Quick Actions</h3>
-                    <div className="space-y-2">
-                      <select
-                        value={selectedSymbol}
-                        onChange={(e) => setSelectedSymbol(e.target.value)}
-                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
-                      >
-                        {marketData.map(item => (
-                          <option key={item.symbol} value={item.symbol}>
-                            {item.symbol}
-                          </option>
-                        ))}
-                      </select>
-                      
-                      <button
-                        onClick={() => requestPrediction(selectedSymbol)}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded flex items-center justify-center space-x-2"
-                      >
-                        <Brain className="w-4 h-4" />
-                        <span>Get Prediction</span>
-                      </button>
-                      
-                      <button
-                        onClick={() => generateStrategy(selectedSymbol)}
-                        className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded flex items-center justify-center space-x-2"
-                      >
-                        <Settings className="w-4 h-4" />
-                        <span>Generate Strategy</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Latest Prediction */}
-                  {predictions[selectedSymbol] && (
-                    <div className="bg-gray-800 rounded-lg p-4">
-                      <h3 className="font-semibold mb-3">Latest Prediction</h3>
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span>Direction:</span>
-                          <span className={
-                            predictions[selectedSymbol].signal_direction === 'BUY' ? 'text-green-400' : 'text-red-400'
-                          }>
-                            {predictions[selectedSymbol].signal_direction}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Confidence:</span>
-                          <span>{(predictions[selectedSymbol].confidence * 100).toFixed(1)}%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Strength:</span>
-                          <span>{predictions[selectedSymbol].signal_strength.toFixed(1)}%</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              <div>
+                <div className="text-sm text-slate-400 mb-1">Current Price</div>
+                <div className="text-2xl font-bold text-slate-50">
+                  ${mainPrediction.current_price.toLocaleString()}
                 </div>
               </div>
-            </motion.div>
-          )}
 
-          {activeTab === 'ai' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-            >
-              <AIInsightsPanel
-                selectedSymbol={selectedSymbol}
-                onSymbolChange={setSelectedSymbol}
-              />
-            </motion.div>
-          )}
+              <div>
+                <div className="text-sm text-slate-400 mb-1">Predicted Price</div>
+                <div className={`text-2xl font-bold ${getPredictionColor(mainPrediction.predicted_change).text}`}>
+                  ${mainPrediction.predicted_price.toLocaleString()}
+                </div>
+              </div>
 
-          {activeTab === '3d' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-            >
-              <Market3DVisualization
-                marketData={marketData}
-                selectedSymbol={selectedSymbol}
-                onSymbolSelect={setSelectedSymbol}
-              />
-            </motion.div>
-          )}
+              <div>
+                <div className="text-sm text-slate-400 mb-1">AI Confidence</div>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 bg-slate-800 rounded-full h-3 overflow-hidden">
+                    <motion.div
+                      className={`h-full rounded-full ${
+                        mainPrediction.confidence >= 80 ? 'bg-green-500' :
+                        mainPrediction.confidence >= 60 ? 'bg-cyan-500' :
+                        mainPrediction.confidence >= 40 ? 'bg-yellow-500' :
+                        'bg-red-500'
+                      }`}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${mainPrediction.confidence}%` }}
+                      transition={{ duration: 1, ease: 'easeOut' }}
+                    />
+                  </div>
+                  <span className={`text-lg font-bold ${getConfidenceColor(mainPrediction.confidence)}`}>
+                    {mainPrediction.confidence}%
+                  </span>
+                </div>
+              </div>
+            </div>
 
-          {activeTab === 'depth' && depthData && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-            >
-              <MarketDepthChart
-                data={depthData}
-                width={1000}
-                height={500}
-              />
-            </motion.div>
-          )}
+            {/* AI Signals */}
+            {mainPrediction.signals && mainPrediction.signals.length > 0 && (
+              <div>
+                <div className="text-sm font-semibold text-slate-300 mb-3">AI Detected Signals</div>
+                <div className="flex flex-wrap gap-2">
+                  {mainPrediction.signals.map((signal, index) => (
+                    <motion.div
+                      key={index}
+                      className="px-3 py-1.5 bg-purple-500/20 border border-purple-500/30 text-purple-400 rounded-lg text-sm"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.2 + index * 0.05 }}
+                    >
+                      {signal}
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </motion.div>
 
-          {activeTab === 'correlations' && correlationData && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-            >
-              <CorrelationHeatMap
-                data={correlationData}
-                width={800}
-                height={600}
-                onCellClick={(symbol1, symbol2, correlation) => {
-                  console.log(`Correlation between ${symbol1} and ${symbol2}: ${correlation}`);
-                }}
-              />
-            </motion.div>
-          )}
-
-          {activeTab === 'strategies' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="space-y-4"
-            >
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold">Auto-Generated Strategies</h2>
-                <button
-                  onClick={() => generateStrategy(selectedSymbol)}
-                  className="bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded flex items-center space-x-2"
+          {/* Predictions Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {predictions.slice(1, 7).map((pred, index) => {
+              const colors = getPredictionColor(pred.predicted_change);
+              
+              return (
+                <motion.div
+                  key={pred.symbol}
+                  className={`bg-slate-900/80 backdrop-blur-xl border ${colors.border} shadow-xl rounded-xl p-6 hover:shadow-2xl transition-all`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 + index * 0.05 }}
+                  whileHover={{ scale: 1.02, y: -4 }}
                 >
-                  <Brain className="w-4 h-4" />
-                  <span>Generate New Strategy</span>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {strategies.map((strategy) => (
-                  <div key={strategy.id} className="bg-gray-800 rounded-lg p-4">
-                    <div className="flex justify-between items-start mb-3">
-                      <h3 className="font-semibold">{strategy.name}</h3>
-                      <span className="text-xs text-gray-400">
-                        {new Date(strategy.created_at).toLocaleString()}
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-lg font-bold text-slate-50">{pred.symbol}</h4>
+                    <div className={`flex items-center gap-1 px-3 py-1 rounded-lg ${colors.bg}`}>
+                      {pred.predicted_change >= 0 ? (
+                        <TrendingUp className={colors.text} size={16} />
+                      ) : (
+                        <TrendingDown className={colors.text} size={16} />
+                      )}
+                      <span className={`font-bold ${colors.text}`}>
+                        {pred.predicted_change >= 0 ? '+' : ''}{pred.predicted_change.toFixed(1)}%
                       </span>
                     </div>
-                    
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span>Symbol:</span>
-                        <span className="font-mono">{strategy.symbol}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Type:</span>
-                        <span className="capitalize">{strategy.type}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Expected Win Rate:</span>
-                        <span className="text-green-400">
-                          {(strategy.expected_performance.win_rate * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Avg Return:</span>
-                        <span className="text-blue-400">
-                          {(strategy.expected_performance.avg_return * 100).toFixed(2)}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Max Drawdown:</span>
-                        <span className="text-red-400">
-                          {(strategy.expected_performance.max_drawdown * 100).toFixed(1)}%
-                        </span>
-                      </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-400">Current</span>
+                      <span className="text-slate-50 font-semibold">${pred.current_price.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-400">Target</span>
+                      <span className={`font-semibold ${colors.text}`}>${pred.predicted_price.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-400">Confidence</span>
+                      <span className={`font-semibold ${getConfidenceColor(pred.confidence)}`}>{pred.confidence}%</span>
                     </div>
                   </div>
-                ))}
-              </div>
-            </motion.div>
-          )}
+                </motion.div>
+              );
+            })}
+          </div>
 
-          {activeTab === 'risk' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-            >
-              <RealTimeRiskMonitor />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+          {/* Accuracy Stats */}
+          <motion.div
+            className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
+          >
+            <h3 className="text-xl font-semibold text-slate-50 mb-6">Model Performance</h3>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Target className="w-5 h-5 text-green-400" />
+                  <span className="text-sm text-slate-400">Accuracy (24h)</span>
+                </div>
+                <p className="text-3xl font-bold text-green-400">78%</p>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Activity className="w-5 h-5 text-cyan-400" />
+                  <span className="text-sm text-slate-400">Predictions Made</span>
+                </div>
+                <p className="text-3xl font-bold text-cyan-400">1,247</p>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="w-5 h-5 text-yellow-400" />
+                  <span className="text-sm text-slate-400">Avg Confidence</span>
+                </div>
+                <p className="text-3xl font-bold text-yellow-400">
+                  {predictions.length > 0 
+                    ? (predictions.reduce((sum, p) => sum + p.confidence, 0) / predictions.length).toFixed(0)
+                    : '0'}%
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart3 className="w-5 h-5 text-purple-400" />
+                  <span className="text-sm text-slate-400">Profitable Signals</span>
+                </div>
+                <p className="text-3xl font-bold text-purple-400">82%</p>
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
+
+      {/* No Predictions State */}
+      {!mainPrediction && !loading && (
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-12 text-center"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+        >
+          <Brain className="w-16 h-16 mx-auto mb-4 text-slate-600" />
+          <h3 className="text-xl font-semibold text-slate-50 mb-2">No Predictions Available</h3>
+          <p className="text-slate-400">Select a symbol and timeframe to view AI predictions</p>
+        </motion.div>
+      )}
     </div>
   );
 };

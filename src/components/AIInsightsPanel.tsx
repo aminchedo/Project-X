@@ -1,449 +1,352 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { api } from '../services/api';
 import { 
   Brain, 
-  MessageSquare, 
   TrendingUp, 
-  TrendingDown,
+  TrendingDown, 
+  Activity, 
   AlertCircle,
-  Lightbulb,
+  RefreshCw,
   Sparkles,
+  MessageSquare,
+  Target,
   BarChart3,
-  FileText,
-  Send,
-  Loader2
+  Copy,
+  Check
 } from 'lucide-react';
 
-interface SentimentAnalysis {
-  average_sentiment: number;
-  sentiment_distribution: {
-    positive: number;
-    negative: number;
-    neutral: number;
-  };
-  confidence: number;
-  timestamp: string;
-}
-
-interface TradingInsights {
+interface AIInsight {
+  id: string;
   symbol: string;
   timestamp: string;
-  technical_analysis: string;
-  sentiment_analysis: SentimentAnalysis;
-  recommendation: string;
-  confidence_score: number;
-  risk_assessment: string;
+  category: 'technical' | 'fundamental' | 'sentiment' | 'onchain';
+  sentiment: 'bullish' | 'bearish' | 'neutral';
+  confidence: number;
+  insight: string;
+  key_points: string[];
+  recommendations?: string[];
 }
 
 interface AIInsightsPanelProps {
-  selectedSymbol: string;
-  onSymbolChange?: (symbol: string) => void;
+  symbol?: string;
 }
 
-const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ selectedSymbol, onSymbolChange }) => {
-  const [insights, setInsights] = useState<TradingInsights | null>(null);
-  const [sentiment, setSentiment] = useState<SentimentAnalysis | null>(null);
-  const [marketAnalysis, setMarketAnalysis] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [question, setQuestion] = useState('');
-  const [aiResponse, setAiResponse] = useState('');
-  const [isAsking, setIsAsking] = useState(false);
-  
-  const [activeTab, setActiveTab] = useState<'insights' | 'sentiment' | 'analysis' | 'chat'>('insights');
+const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ symbol = 'BTCUSDT' }) => {
+  const [insights, setInsights] = useState<AIInsight[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (selectedSymbol) {
-      loadAIInsights();
-    }
-  }, [selectedSymbol]);
+    fetchInsights();
+  }, [symbol, selectedCategory]);
 
-  const loadAIInsights = async () => {
-    setIsLoading(true);
+  const fetchInsights = async () => {
     try {
-      // Load comprehensive insights
-      const insightsResponse = await fetch(`/api/ai/insights/${selectedSymbol}`);
-      if (insightsResponse.ok) {
-        const insightsData = await insightsResponse.json();
-        setInsights(insightsData);
-      }
-
-      // Load sentiment analysis
-      const sentimentResponse = await fetch(`/api/ai/sentiment/${selectedSymbol}`);
-      if (sentimentResponse.ok) {
-        const sentimentData = await sentimentResponse.json();
-        setSentiment(sentimentData);
-      }
-
-    } catch (error) {
-      console.error('Error loading AI insights:', error);
+      setLoading(true);
+      setError(null);
+      const response = await api.trading.getTradingInsights(symbol);
+      setInsights(response.insights || []);
+    } catch (err) {
+      setError('Failed to load AI insights');
+      console.error('AI insights error:', err);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const generateMarketAnalysis = async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/ai/market-analysis', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          symbol: selectedSymbol,
-          market_data: {
-            symbol: selectedSymbol,
-            price: 100,
-            volume: 1000000,
-            change_24h: 2.5
-          }
-        })
-      });
+  const handleCopy = (insight: AIInsight) => {
+    const text = `${insight.symbol} - ${insight.category.toUpperCase()}\n${insight.insight}\n\nKey Points:\n${insight.key_points.join('\n')}`;
+    navigator.clipboard.writeText(text);
+    setCopiedId(insight.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
-      if (response.ok) {
-        const data = await response.json();
-        setMarketAnalysis(data.analysis);
-      }
-    } catch (error) {
-      console.error('Error generating market analysis:', error);
-      setMarketAnalysis('Unable to generate market analysis at this time.');
-    } finally {
-      setIsLoading(false);
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'technical': return <BarChart3 className="w-4 h-4" />;
+      case 'fundamental': return <Target className="w-4 h-4" />;
+      case 'sentiment': return <MessageSquare className="w-4 h-4" />;
+      case 'onchain': return <Activity className="w-4 h-4" />;
+      default: return <Sparkles className="w-4 h-4" />;
     }
   };
 
-  const askAIQuestion = async () => {
-    if (!question.trim()) return;
-
-    setIsAsking(true);
-    try {
-      const context = `Current market data for ${selectedSymbol}: ${JSON.stringify(insights)}`;
-      
-      const response = await fetch('/api/ai/ask-question', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          question: question,
-          context: context
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAiResponse(data.answer);
-      }
-    } catch (error) {
-      console.error('Error asking AI question:', error);
-      setAiResponse('Unable to process your question at this time.');
-    } finally {
-      setIsAsking(false);
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case 'technical': return 'cyan';
+      case 'fundamental': return 'purple';
+      case 'sentiment': return 'pink';
+      case 'onchain': return 'green';
+      default: return 'slate';
     }
   };
 
-  const getSentimentColor = (sentiment: number) => {
-    if (sentiment > 0.2) return 'text-green-400';
-    if (sentiment < -0.2) return 'text-red-400';
-    return 'text-yellow-400';
-  };
-
-  const getSentimentIcon = (sentiment: number) => {
-    if (sentiment > 0.2) return <TrendingUp className="w-5 h-5 text-green-400" />;
-    if (sentiment < -0.2) return <TrendingDown className="w-5 h-5 text-red-400" />;
-    return <AlertCircle className="w-5 h-5 text-yellow-400" />;
-  };
-
-  const getRiskColor = (risk: string) => {
-    switch (risk?.toLowerCase()) {
-      case 'low': return 'text-green-400';
-      case 'medium': return 'text-yellow-400';
-      case 'high': return 'text-red-400';
-      default: return 'text-gray-400';
+  const getSentimentConfig = (sentiment: string) => {
+    switch (sentiment) {
+      case 'bullish':
+        return {
+          icon: TrendingUp,
+          color: 'text-green-400',
+          bg: 'bg-green-500/20',
+          border: 'border-green-500/30'
+        };
+      case 'bearish':
+        return {
+          icon: TrendingDown,
+          color: 'text-red-400',
+          bg: 'bg-red-500/20',
+          border: 'border-red-500/30'
+        };
+      default:
+        return {
+          icon: Activity,
+          color: 'text-slate-400',
+          bg: 'bg-slate-500/20',
+          border: 'border-slate-500/30'
+        };
     }
   };
 
-  const tabs = [
-    { id: 'insights', label: 'AI Insights', icon: Brain },
-    { id: 'sentiment', label: 'Sentiment', icon: BarChart3 },
-    { id: 'analysis', label: 'Analysis', icon: FileText },
-    { id: 'chat', label: 'AI Chat', icon: MessageSquare }
-  ];
+  const filteredInsights = selectedCategory === 'all' 
+    ? insights 
+    : insights.filter(i => i.category === selectedCategory);
 
-  return (
-    <div className="bg-gray-800 rounded-lg p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-3">
-          <Brain className="w-6 h-6 text-purple-400" />
-          <h2 className="text-xl font-bold">AI Market Intelligence</h2>
-          <Sparkles className="w-5 h-5 text-yellow-400" />
-        </div>
-        
-        <button
-          onClick={loadAIInsights}
-          disabled={isLoading}
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center space-x-2 disabled:opacity-50"
+  if (loading) {
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-8 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+        <p className="text-slate-400">Loading AI insights...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-xl border border-red-500/50 rounded-xl p-8 text-center">
+        <AlertCircle className="text-red-400 mx-auto mb-4" size={48} />
+        <p className="text-slate-50 mb-4">{error}</p>
+        <button 
+          onClick={fetchInsights}
+          className="bg-cyan-500 hover:bg-cyan-600 text-white px-6 py-2 rounded-lg transition-colors"
         >
-          {isLoading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Brain className="w-4 h-4" />
-          )}
-          <span>Refresh AI Insights</span>
+          Retry
         </button>
       </div>
+    );
+  }
 
-      {/* Navigation Tabs */}
-      <div className="flex space-x-1 mb-6 bg-gray-700 rounded-lg p-1">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 flex-1 justify-center ${
-                activeTab === tab.id
-                  ? 'bg-purple-600 text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-600'
-              }`}
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <motion.div 
+        className="flex items-center justify-between flex-wrap gap-4"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-600">
+            <Brain className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-slate-50">AI Insights</h2>
+            <p className="text-sm text-slate-400">Powered by advanced ML models</p>
+          </div>
+        </div>
+        
+        <motion.button
+          onClick={fetchInsights}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-50 rounded-lg font-medium transition-all disabled:opacity-50"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </motion.button>
+      </motion.div>
+
+      {/* Category Filter */}
+      <motion.div 
+        className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-4"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <div className="flex flex-wrap gap-2">
+          {['all', 'technical', 'fundamental', 'sentiment', 'onchain'].map((category) => {
+            const color = getCategoryColor(category);
+            const isActive = selectedCategory === category;
+            
+            return (
+              <motion.button
+                key={category}
+                onClick={() => setSelectedCategory(category)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                  isActive
+                    ? `bg-${color}-500/20 text-${color}-400 border-2 border-${color}-500/50`
+                    : 'bg-slate-800/50 text-slate-400 border-2 border-transparent hover:border-slate-600'
+                }`}
+              >
+                {category !== 'all' && getCategoryIcon(category)}
+                <span className="capitalize">{category}</span>
+                {category !== 'all' && (
+                  <span className="px-2 py-0.5 rounded-full bg-slate-700 text-xs">
+                    {insights.filter(i => i.category === category).length}
+                  </span>
+                )}
+              </motion.button>
+            );
+          })}
+        </div>
+      </motion.div>
+
+      {/* Insights List */}
+      <div className="space-y-4">
+        <AnimatePresence mode="popLayout">
+          {filteredInsights.length === 0 ? (
+            <motion.div
+              key="empty"
+              className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-12 text-center"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
             >
-              <Icon className="w-4 h-4" />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
+              <Brain className="w-16 h-16 mx-auto mb-4 text-slate-600" />
+              <h3 className="text-xl font-semibold text-slate-50 mb-2">No Insights Available</h3>
+              <p className="text-slate-400">AI insights will appear here when available</p>
+            </motion.div>
+          ) : (
+            filteredInsights.map((insight, index) => {
+              const sentimentConfig = getSentimentConfig(insight.sentiment);
+              const categoryColor = getCategoryColor(insight.category);
+              const SentimentIcon = sentimentConfig.icon;
 
-      <AnimatePresence mode="wait">
-        {activeTab === 'insights' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="space-y-6"
-          >
-            {insights ? (
-              <>
-                {/* Trading Recommendation */}
-                <div className="bg-gray-700/50 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-semibold flex items-center">
-                      <Lightbulb className="w-5 h-5 mr-2 text-yellow-400" />
-                      AI Recommendation
-                    </h3>
-                    <div className="text-sm text-gray-400">
-                      Confidence: {(insights.confidence_score * 100).toFixed(1)}%
+              return (
+                <motion.div
+                  key={insight.id}
+                  className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6 hover:shadow-2xl hover:shadow-purple-500/10 transition-all"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                  layout
+                >
+                  {/* Header */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className={`p-2 rounded-lg bg-${categoryColor}-500/20`}>
+                        {getCategoryIcon(insight.category)}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="text-lg font-bold text-slate-50">{insight.symbol}</h3>
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold capitalize bg-${categoryColor}-500/20 text-${categoryColor}-400`}>
+                            {insight.category}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400">
+                          {new Date(insight.timestamp).toLocaleString()}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-lg font-medium text-blue-400 mb-2">
-                    {insights.recommendation}
-                  </div>
-                  <div className="flex items-center space-x-4 text-sm">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-gray-400">Risk Assessment:</span>
-                      <span className={`font-bold ${getRiskColor(insights.risk_assessment)}`}>
-                        {insights.risk_assessment}
-                      </span>
-                    </div>
-                    <div className="text-gray-400">
-                      Updated: {new Date(insights.timestamp).toLocaleString()}
-                    </div>
-                  </div>
-                </div>
 
-                {/* Technical Analysis */}
-                <div className="bg-gray-700/50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold mb-3 flex items-center">
-                    <BarChart3 className="w-5 h-5 mr-2 text-blue-400" />
-                    Technical Analysis
-                  </h3>
-                  <div className="text-gray-300 whitespace-pre-wrap">
-                    {insights.technical_analysis}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="text-center py-8">
-                <Brain className="w-12 h-12 text-gray-500 mx-auto mb-4" />
-                <p className="text-gray-400">
-                  {isLoading ? 'Loading AI insights...' : 'No insights available. Click refresh to load.'}
-                </p>
-              </div>
-            )}
-          </motion.div>
-        )}
+                    <div className="flex items-center gap-2">
+                      {/* Sentiment Badge */}
+                      <div className={`flex items-center gap-1 px-3 py-1.5 rounded-full ${sentimentConfig.bg} ${sentimentConfig.border} border`}>
+                        <SentimentIcon className={`w-4 h-4 ${sentimentConfig.color}`} />
+                        <span className={`text-sm font-semibold capitalize ${sentimentConfig.color}`}>
+                          {insight.sentiment}
+                        </span>
+                      </div>
 
-        {activeTab === 'sentiment' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="space-y-6"
-          >
-            {sentiment ? (
-              <>
-                {/* Sentiment Overview */}
-                <div className="bg-gray-700/50 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold">Market Sentiment</h3>
-                    <div className="flex items-center space-x-2">
-                      {getSentimentIcon(sentiment.average_sentiment)}
-                      <span className={`font-bold ${getSentimentColor(sentiment.average_sentiment)}`}>
-                        {sentiment.average_sentiment > 0 ? 'Positive' : 
-                         sentiment.average_sentiment < 0 ? 'Negative' : 'Neutral'}
-                      </span>
+                      {/* Copy Button */}
+                      <motion.button
+                        onClick={() => handleCopy(insight)}
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
+                      >
+                        {copiedId === insight.id ? (
+                          <Check className="w-4 h-4 text-green-400" />
+                        ) : (
+                          <Copy className="w-4 h-4 text-slate-400" />
+                        )}
+                      </motion.button>
                     </div>
                   </div>
-                  
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-400">
-                        {sentiment.sentiment_distribution.positive}
-                      </div>
-                      <div className="text-sm text-gray-400">Positive</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-gray-400">
-                        {sentiment.sentiment_distribution.neutral}
-                      </div>
-                      <div className="text-sm text-gray-400">Neutral</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-red-400">
-                        {sentiment.sentiment_distribution.negative}
-                      </div>
-                      <div className="text-sm text-gray-400">Negative</div>
-                    </div>
+
+                  {/* Main Insight */}
+                  <div className="bg-slate-800/50 rounded-lg p-4 mb-4 border border-slate-700/30">
+                    <p className="text-slate-200 leading-relaxed">{insight.insight}</p>
                   </div>
-                  
-                  <div className="mt-4">
-                    <div className="flex justify-between text-sm mb-2">
-                      <span>Confidence Score</span>
-                      <span>{(sentiment.confidence * 100).toFixed(1)}%</span>
+
+                  {/* Key Points */}
+                  {insight.key_points && insight.key_points.length > 0 && (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-yellow-400" />
+                        Key Points
+                      </h4>
+                      <ul className="space-y-2">
+                        {insight.key_points.map((point, idx) => (
+                          <motion.li
+                            key={idx}
+                            className="flex items-start gap-2 text-sm text-slate-300"
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.1 + idx * 0.05 }}
+                          >
+                            <span className="text-cyan-400 mt-0.5">•</span>
+                            <span>{point}</span>
+                          </motion.li>
+                        ))}
+                      </ul>
                     </div>
-                    <div className="w-full bg-gray-600 rounded-full h-2">
-                      <div
-                        className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                        style={{ width: `${sentiment.confidence * 100}%` }}
+                  )}
+
+                  {/* Recommendations */}
+                  {insight.recommendations && insight.recommendations.length > 0 && (
+                    <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-4">
+                      <h4 className="text-sm font-semibold text-cyan-400 mb-2 flex items-center gap-2">
+                        <Target className="w-4 h-4" />
+                        Recommendations
+                      </h4>
+                      <ul className="space-y-1">
+                        {insight.recommendations.map((rec, idx) => (
+                          <li key={idx} className="text-sm text-slate-300">
+                            {rec}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Confidence Indicator */}
+                  <div className="mt-4 pt-4 border-t border-slate-700">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-slate-400">AI Confidence</span>
+                      <span className="text-sm font-bold text-cyan-400">{(insight.confidence * 100).toFixed(0)}%</span>
+                    </div>
+                    <div className="w-full bg-slate-700/50 rounded-full h-2">
+                      <motion.div
+                        className="bg-gradient-to-r from-cyan-500 to-blue-600 h-2 rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${insight.confidence * 100}%` }}
+                        transition={{ duration: 1, ease: "easeOut", delay: index * 0.05 }}
                       />
                     </div>
                   </div>
-                </div>
-              </>
-            ) : (
-              <div className="text-center py-8">
-                <BarChart3 className="w-12 h-12 text-gray-500 mx-auto mb-4" />
-                <p className="text-gray-400">No sentiment data available.</p>
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {activeTab === 'analysis' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="space-y-6"
-          >
-            <div className="bg-gray-700/50 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold flex items-center">
-                  <FileText className="w-5 h-5 mr-2 text-green-400" />
-                  AI Market Analysis
-                </h3>
-                <button
-                  onClick={generateMarketAnalysis}
-                  disabled={isLoading}
-                  className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm flex items-center space-x-1 disabled:opacity-50"
-                >
-                  {isLoading ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-3 h-3" />
-                  )}
-                  <span>Generate</span>
-                </button>
-              </div>
-              
-              <div className="text-gray-300 whitespace-pre-wrap min-h-[200px]">
-                {marketAnalysis || 'Click "Generate" to create AI-powered market analysis...'}
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {activeTab === 'chat' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="space-y-6"
-          >
-            <div className="bg-gray-700/50 rounded-lg p-4">
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <MessageSquare className="w-5 h-5 mr-2 text-blue-400" />
-                Ask AI Assistant
-              </h3>
-              
-              <div className="space-y-4">
-                <div className="flex space-x-2">
-                  <input
-                    type="text"
-                    value={question}
-                    onChange={(e) => setQuestion(e.target.value)}
-                    placeholder="Ask about market conditions, trends, or trading advice..."
-                    className="flex-1 bg-gray-600 border border-gray-500 rounded-lg px-3 py-2 text-white placeholder-gray-400"
-                    onKeyPress={(e) => e.key === 'Enter' && askAIQuestion()}
-                  />
-                  <button
-                    onClick={askAIQuestion}
-                    disabled={isAsking || !question.trim()}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center space-x-2 disabled:opacity-50"
-                  >
-                    {isAsking ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-                
-                {aiResponse && (
-                  <div className="bg-gray-600/50 rounded-lg p-4">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <Brain className="w-4 h-4 text-purple-400" />
-                      <span className="text-sm font-medium text-purple-400">AI Assistant</span>
-                    </div>
-                    <div className="text-gray-300">{aiResponse}</div>
-                  </div>
-                )}
-              </div>
-              
-              {/* Suggested Questions */}
-              <div className="mt-6">
-                <h4 className="text-sm font-medium text-gray-400 mb-2">Suggested Questions:</h4>
-                <div className="space-y-1">
-                  {[
-                    `What's the outlook for ${selectedSymbol}?`,
-                    `Should I buy or sell ${selectedSymbol} now?`,
-                    `What are the key risk factors for ${selectedSymbol}?`,
-                    `What technical levels should I watch?`
-                  ].map((suggestedQ, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setQuestion(suggestedQ)}
-                      className="text-xs text-blue-400 hover:text-blue-300 block"
-                    >
-                      {suggestedQ}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                </motion.div>
+              );
+            })
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };

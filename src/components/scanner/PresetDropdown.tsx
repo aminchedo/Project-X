@@ -1,266 +1,162 @@
-import React, { useState, useEffect } from 'react';
-import { Save, FolderOpen, Star, Trash2, Download, Upload } from 'lucide-react';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Bookmark, ChevronDown, Star, Trash2, Edit } from 'lucide-react';
 
-interface Preset {
+interface ScanPreset {
   id: string;
   name: string;
+  description: string;
   symbols: string[];
   timeframes: string[];
+  filters: any;
   isFavorite?: boolean;
-  createdAt: string;
 }
 
 interface PresetDropdownProps {
-  symbols: string[];
-  timeframes: string[];
-  onLoad: (preset: Preset) => void;
+  presets: ScanPreset[];
+  selectedPreset?: string;
+  onSelectPreset: (preset: ScanPreset) => void;
+  onDeletePreset?: (id: string) => void;
+  onToggleFavorite?: (id: string) => void;
 }
 
-const PresetDropdown: React.FC<PresetDropdownProps> = ({ symbols, timeframes, onLoad }) => {
-  const [presets, setPresets] = useState<Preset[]>([]);
-  const [showMenu, setShowMenu] = useState(false);
-  const [showSaveModal, setShowSaveModal] = useState(false);
-  const [presetName, setPresetName] = useState('');
-  const [makeFavorite, setMakeFavorite] = useState(false);
+const PresetDropdown: React.FC<PresetDropdownProps> = ({
+  presets,
+  selectedPreset,
+  onSelectPreset,
+  onDeletePreset,
+  onToggleFavorite
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
 
-  // Load presets from localStorage
-  useEffect(() => {
-    const stored = localStorage.getItem('scanner_presets');
-    if (stored) {
-      try {
-        setPresets(JSON.parse(stored));
-      } catch (error) {
-        console.error('Failed to load presets:', error);
-      }
-    }
-  }, []);
-
-  // Save presets to localStorage
-  const savePresetsToStorage = (updatedPresets: Preset[]) => {
-    localStorage.setItem('scanner_presets', JSON.stringify(updatedPresets));
-    setPresets(updatedPresets);
-  };
-
-  const handleSavePreset = () => {
-    if (!presetName.trim()) return;
-
-    const newPreset: Preset = {
-      id: Date.now().toString(),
-      name: presetName,
-      symbols,
-      timeframes,
-      isFavorite: makeFavorite,
-      createdAt: new Date().toISOString(),
-    };
-
-    savePresetsToStorage([...presets, newPreset]);
-    setShowSaveModal(false);
-    setPresetName('');
-    setMakeFavorite(false);
-  };
-
-  const handleDeletePreset = (id: string) => {
-    if (confirm('آیا مطمئن هستید که می‌خواهید این پیش‌تنظیم را حذف کنید؟')) {
-      savePresetsToStorage(presets.filter(p => p.id !== id));
-    }
-  };
-
-  const handleToggleFavorite = (id: string) => {
-    savePresetsToStorage(
-      presets.map(p => p.id === id ? { ...p, isFavorite: !p.isFavorite } : p)
-    );
-  };
-
-  const handleExportPresets = () => {
-    const dataStr = JSON.stringify(presets, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `scanner-presets-${Date.now()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportPresets = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const imported = JSON.parse(e.target?.result as string);
-        if (Array.isArray(imported)) {
-          savePresetsToStorage([...presets, ...imported]);
-        }
-      } catch (error) {
-        alert('فایل نامعتبر است');
-      }
-    };
-    reader.readAsText(file);
-  };
+  const currentPreset = presets.find(p => p.id === selectedPreset);
 
   return (
-    <>
-      <div className="relative">
-        <button
-          onClick={() => setShowMenu(!showMenu)}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-700/70 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors font-medium"
-        >
-          <FolderOpen className="w-4 h-4" />
-          <span>پیش‌تنظیم‌ها</span>
-        </button>
-
-        {showMenu && (
-          <div className="absolute left-0 top-full mt-2 w-72 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl z-20 overflow-hidden">
-            {/* Save Current */}
-            <button
-              onClick={() => {
-                setShowSaveModal(true);
-                setShowMenu(false);
-              }}
-              className="w-full px-4 py-3 text-right hover:bg-slate-700/50 text-slate-300 transition-colors border-b border-slate-700 flex items-center gap-2"
-            >
-              <Save className="w-4 h-4 text-cyan-400" />
-              <span>ذخیره تنظیمات فعلی...</span>
-            </button>
-
-            {/* Presets List */}
-            {presets.length > 0 && (
-              <div className="max-h-64 overflow-y-auto border-b border-slate-700">
-                {presets
-                  .sort((a, b) => (b.isFavorite ? 1 : 0) - (a.isFavorite ? 1 : 0))
-                  .map((preset) => (
-                    <div
-                      key={preset.id}
-                      className="px-4 py-3 hover:bg-slate-700/50 transition-colors group"
-                    >
-                      <div className="flex items-start justify-between">
-                        <button
-                          onClick={() => {
-                            onLoad(preset);
-                            setShowMenu(false);
-                          }}
-                          className="flex-1 text-right"
-                        >
-                          <div className="flex items-center gap-2">
-                            {preset.isFavorite && <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />}
-                            <span className="text-slate-200 font-medium">{preset.name}</span>
-                          </div>
-                          <div className="text-xs text-slate-400 mt-1">
-                            {preset.symbols.length} نماد • {preset.timeframes.length} بازه
-                          </div>
-                        </button>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleToggleFavorite(preset.id);
-                            }}
-                            className="p-1 hover:bg-slate-600 rounded"
-                          >
-                            <Star className={`w-3 h-3 ${preset.isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-slate-400'}`} />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeletePreset(preset.id);
-                            }}
-                            className="p-1 hover:bg-red-500/20 rounded"
-                          >
-                            <Trash2 className="w-3 h-3 text-red-400" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-              </div>
+    <div className="relative">
+      <motion.button
+        onClick={() => setIsOpen(!isOpen)}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        className="w-full flex items-center justify-between px-4 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-50 rounded-xl font-medium transition-all"
+      >
+        <div className="flex items-center gap-3">
+          <Bookmark className="w-5 h-5 text-purple-400" />
+          <div className="text-left">
+            <div className="font-semibold">{currentPreset?.name || 'Select Preset'}</div>
+            {currentPreset && (
+              <div className="text-xs text-slate-400">{currentPreset.description}</div>
             )}
-
-            {/* Import/Export */}
-            <div className="p-2 flex gap-2">
-              <button
-                onClick={handleExportPresets}
-                className="flex-1 px-3 py-2 bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded text-sm flex items-center justify-center gap-1 transition-colors"
-              >
-                <Download className="w-3 h-3" />
-                <span>خروجی</span>
-              </button>
-              <label className="flex-1 px-3 py-2 bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded text-sm flex items-center justify-center gap-1 transition-colors cursor-pointer">
-                <Upload className="w-3 h-3" />
-                <span>ورودی</span>
-                <input
-                  id="import-presets"
-                  name="import-presets"
-                  type="file"
-                  accept=".json"
-                  onChange={handleImportPresets}
-                  className="hidden"
-                />
-              </label>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Save Modal */}
-      {showSaveModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
-            <h3 className="text-xl font-bold text-white">ذخیره پیش‌تنظیم جدید</h3>
-            
-            <div className="space-y-2">
-              <label htmlFor="preset-name" className="block text-sm font-medium text-slate-300">
-                نام پیش‌تنظیم
-              </label>
-              <input
-                id="preset-name"
-                name="preset-name"
-                type="text"
-                value={presetName}
-                onChange={(e) => setPresetName(e.target.value)}
-                placeholder="مثال: معاملات روزانه"
-                autoFocus
-                className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:border-cyan-500/50 focus:outline-none"
-              />
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="makeFavorite"
-                checked={makeFavorite}
-                onChange={(e) => setMakeFavorite(e.target.checked)}
-                className="w-4 h-4 accent-yellow-500"
-              />
-              <label htmlFor="makeFavorite" className="text-sm text-slate-300">
-                علامت‌گذاری به عنوان محبوب
-              </label>
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={handleSavePreset}
-                disabled={!presetName.trim()}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg font-medium hover:from-cyan-600 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                ذخیره
-              </button>
-              <button
-                onClick={() => {
-                  setShowSaveModal(false);
-                  setPresetName('');
-                  setMakeFavorite(false);
-                }}
-                className="px-4 py-2 bg-slate-700 text-slate-300 rounded-lg font-medium hover:bg-slate-600 transition-colors"
-              >
-                انصراف
-              </button>
-            </div>
           </div>
         </div>
-      )}
-    </>
+        <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </motion.button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              className="fixed inset-0 z-10"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsOpen(false)}
+            />
+
+            {/* Dropdown */}
+            <motion.div
+              className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-20 max-h-96 overflow-y-auto"
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="p-2">
+                <div className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Saved Presets ({presets.length})
+                </div>
+
+                {presets.length === 0 ? (
+                  <div className="px-3 py-8 text-center text-slate-400">
+                    <Bookmark className="w-8 h-8 mx-auto mb-2 text-slate-600" />
+                    <p className="text-sm">No saved presets</p>
+                    <p className="text-xs text-slate-500 mt-1">Save your first preset to get started</p>
+                  </div>
+                ) : (
+                  presets.map((preset) => (
+                    <motion.div
+                      key={preset.id}
+                      className={`group rounded-lg transition-all ${
+                        selectedPreset === preset.id
+                          ? 'bg-cyan-500/20 border border-cyan-500/50'
+                          : 'hover:bg-slate-800'
+                      }`}
+                      whileHover={{ x: 4 }}
+                    >
+                      <button
+                        onClick={() => {
+                          onSelectPreset(preset);
+                          setIsOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-3"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-semibold text-slate-50">{preset.name}</span>
+                              {preset.isFavorite && (
+                                <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-400 mb-2">{preset.description}</p>
+                            <div className="flex flex-wrap gap-1">
+                              <span className="px-2 py-0.5 bg-cyan-500/20 text-cyan-400 rounded text-xs">
+                                {preset.symbols.length} symbols
+                              </span>
+                              <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded text-xs">
+                                {preset.timeframes.length} timeframes
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {onToggleFavorite && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onToggleFavorite(preset.id);
+                                }}
+                                className="p-1 hover:bg-slate-700 rounded"
+                              >
+                                <Star className={`w-4 h-4 ${preset.isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-slate-400'}`} />
+                              </button>
+                            )}
+                            {onDeletePreset && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Delete preset "${preset.name}"?`)) {
+                                    onDeletePreset(preset.id);
+                                  }
+                                }}
+                                className="p-1 hover:bg-red-500/20 rounded"
+                              >
+                                <Trash2 className="w-4 h-4 text-red-400" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
   );
 };
 

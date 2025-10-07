@@ -1,560 +1,417 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { api } from '../services/api';
+import { realtimeWs } from '../services/websocket';
 import { 
-  AlertTriangle, 
   Shield, 
-  TrendingDown, 
-  TrendingUp,
+  AlertTriangle, 
+  TrendingDown,
   Activity,
-  Zap,
   DollarSign,
   Percent,
-  Clock,
-  AlertCircle
+  AlertCircle,
+  CheckCircle,
+  RefreshCw
 } from 'lucide-react';
 
-interface RiskMetric {
-  name: string;
-  value: number;
-  threshold: number;
-  status: 'safe' | 'warning' | 'critical';
-  trend: 'up' | 'down' | 'stable';
-  unit: string;
-}
-
-interface PositionRisk {
-  symbol: string;
-  exposure: number;
-  var: number; // Value at Risk
-  leverage: number;
-  unrealizedPnl: number;
-  riskScore: number;
+interface RiskMetrics {
+  current_risk_level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  portfolio_risk: number;
+  var_95: number;
+  sharpe_ratio: number;
+  max_drawdown: number;
+  current_drawdown: number;
+  position_concentration: number;
+  total_exposure: number;
+  risk_score: number;
 }
 
 interface RiskAlert {
   id: string;
-  timestamp: number;
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  level: 'warning' | 'danger' | 'critical';
   message: string;
-  symbol?: string;
-  metric: string;
-  value: number;
-  threshold: number;
+  timestamp: string;
 }
 
 const RealTimeRiskMonitor: React.FC = () => {
-  const [riskMetrics, setRiskMetrics] = useState<RiskMetric[]>([]);
-  const [positionRisks, setPositionRisks] = useState<PositionRisk[]>([]);
-  const [riskAlerts, setRiskAlerts] = useState<RiskAlert[]>([]);
-  const [overallRiskScore, setOverallRiskScore] = useState<number>(0);
-  const [portfolioVar, setPortfolioVar] = useState<number>(0);
-  const [maxDrawdown, setMaxDrawdown] = useState<number>(0);
-  const [sharpeRatio, setSharpeRatio] = useState<number>(0);
+  const [metrics, setMetrics] = useState<RiskMetrics | null>(null);
+  const [alerts, setAlerts] = useState<RiskAlert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    // Initialize with mock data - in real implementation, this would come from WebSocket
-    generateMockRiskData();
-    
-    // Real-time updates every 1 second for critical metrics
-    const riskInterval = setInterval(() => {
-      updateRiskMetrics();
-    }, 1000);
+    fetchRiskMetrics();
+    connectWebSocket();
 
-    // Position updates every 2 seconds
-    const positionInterval = setInterval(() => {
-      updatePositionRisks();
-    }, 2000);
-
-    // Alert updates every 5 seconds
-    const alertInterval = setInterval(() => {
-      updateRiskAlerts();
-    }, 5000);
-
+    const interval = setInterval(fetchRiskMetrics, 30000); // Update every 30s
     return () => {
-      clearInterval(riskInterval);
-      clearInterval(positionInterval);
-      clearInterval(alertInterval);
+      clearInterval(interval);
+      realtimeWs.disconnect();
     };
   }, []);
 
-  const generateMockRiskData = () => {
-    const metrics: RiskMetric[] = [
-      {
-        name: 'Portfolio VaR (1D)',
-        value: 2.3,
-        threshold: 5.0,
-        status: 'safe',
-        trend: 'stable',
-        unit: '%'
-      },
-      {
-        name: 'Max Leverage',
-        value: 3.2,
-        threshold: 5.0,
-        status: 'safe',
-        trend: 'down',
-        unit: 'x'
-      },
-      {
-        name: 'Correlation Risk',
-        value: 0.75,
-        threshold: 0.8,
-        status: 'warning',
-        trend: 'up',
-        unit: ''
-      },
-      {
-        name: 'Concentration Risk',
-        value: 25.4,
-        threshold: 30.0,
-        status: 'warning',
-        trend: 'stable',
-        unit: '%'
-      },
-      {
-        name: 'Liquidity Risk',
-        value: 12.1,
-        threshold: 20.0,
-        status: 'safe',
-        trend: 'down',
-        unit: '%'
-      },
-      {
-        name: 'Volatility Risk',
-        value: 18.7,
-        threshold: 25.0,
-        status: 'safe',
-        trend: 'up',
-        unit: '%'
-      }
-    ];
-
-    const positions: PositionRisk[] = [
-      {
-        symbol: 'BTCUSDT',
-        exposure: 45000,
-        var: 2100,
-        leverage: 2.5,
-        unrealizedPnl: 850,
-        riskScore: 6.2
-      },
-      {
-        symbol: 'ETHUSDT',
-        exposure: 28000,
-        var: 1680,
-        leverage: 3.1,
-        unrealizedPnl: -320,
-        riskScore: 7.8
-      },
-      {
-        symbol: 'SOLUSDT',
-        exposure: 15000,
-        var: 900,
-        leverage: 2.0,
-        unrealizedPnl: 240,
-        riskScore: 5.5
-      }
-    ];
-
-    const alerts: RiskAlert[] = [
-      {
-        id: '1',
-        timestamp: Date.now() - 300000,
-        severity: 'medium',
-        message: 'Correlation risk approaching threshold',
-        metric: 'Correlation Risk',
-        value: 0.75,
-        threshold: 0.8
-      },
-      {
-        id: '2',
-        timestamp: Date.now() - 600000,
-        severity: 'low',
-        message: 'Position concentration in BTCUSDT increased',
-        symbol: 'BTCUSDT',
-        metric: 'Concentration Risk',
-        value: 25.4,
-        threshold: 30.0
-      }
-    ];
-
-    setRiskMetrics(metrics);
-    setPositionRisks(positions);
-    setRiskAlerts(alerts);
-    setOverallRiskScore(6.8);
-    setPortfolioVar(4250);
-    setMaxDrawdown(8.5);
-    setSharpeRatio(1.85);
+  const fetchRiskMetrics = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await api.trading.getRiskMetrics();
+      setMetrics(response);
+    } catch (err) {
+      setError('Failed to load risk metrics');
+      console.error('Risk metrics error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const updateRiskMetrics = () => {
-    setRiskMetrics(prev => prev.map(metric => {
-      const change = (Math.random() - 0.5) * 0.2;
-      const newValue = Math.max(0, metric.value + change);
-      
-      let status: 'safe' | 'warning' | 'critical' = 'safe';
-      if (newValue > metric.threshold * 0.9) status = 'critical';
-      else if (newValue > metric.threshold * 0.7) status = 'warning';
-      
-      let trend: 'up' | 'down' | 'stable' = 'stable';
-      if (change > 0.05) trend = 'up';
-      else if (change < -0.05) trend = 'down';
-
-      return {
-        ...metric,
-        value: newValue,
-        status,
-        trend
-      };
-    }));
-
-    // Update overall risk score
-    setOverallRiskScore(prev => {
-      const change = (Math.random() - 0.5) * 0.5;
-      return Math.max(0, Math.min(10, prev + change));
+  const connectWebSocket = () => {
+    realtimeWs.connect();
+    
+    realtimeWs.onStateChange((state) => {
+      setIsConnected(state === 'connected');
     });
 
-    // Update portfolio metrics
-    setPortfolioVar(prev => prev + (Math.random() - 0.5) * 100);
-    setMaxDrawdown(prev => Math.max(0, prev + (Math.random() - 0.5) * 0.5));
-    setSharpeRatio(prev => Math.max(0, prev + (Math.random() - 0.5) * 0.1));
+    realtimeWs.onMessage((event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'risk_update') {
+          setMetrics(data.metrics);
+        } else if (data.type === 'risk_alert') {
+          setAlerts(prev => [data.alert, ...prev].slice(0, 5));
+        }
+      } catch (err) {
+        console.error('WebSocket message error:', err);
+      }
+    });
   };
 
-  const updatePositionRisks = () => {
-    setPositionRisks(prev => prev.map(position => ({
-      ...position,
-      var: position.var + (Math.random() - 0.5) * 50,
-      unrealizedPnl: position.unrealizedPnl + (Math.random() - 0.5) * 100,
-      riskScore: Math.max(0, Math.min(10, position.riskScore + (Math.random() - 0.5) * 0.5))
-    })));
-  };
-
-  const updateRiskAlerts = () => {
-    // Occasionally add new alerts
-    if (Math.random() > 0.8) {
-      const newAlert: RiskAlert = {
-        id: Date.now().toString(),
-        timestamp: Date.now(),
-        severity: ['low', 'medium', 'high'][Math.floor(Math.random() * 3)] as any,
-        message: `Risk threshold alert for ${['BTCUSDT', 'ETHUSDT', 'SOLUSDT'][Math.floor(Math.random() * 3)]}`,
-        metric: 'Portfolio VaR',
-        value: Math.random() * 10,
-        threshold: 5.0
-      };
-      
-      setRiskAlerts(prev => [newAlert, ...prev].slice(0, 10)); // Keep only last 10 alerts
+  const getRiskLevelConfig = (level: string) => {
+    switch (level) {
+      case 'LOW':
+        return {
+          icon: CheckCircle,
+          color: 'text-green-400',
+          bg: 'bg-green-500/20',
+          border: 'border-green-500/30',
+          gradient: 'from-green-500 to-emerald-600'
+        };
+      case 'MEDIUM':
+        return {
+          icon: Activity,
+          color: 'text-yellow-400',
+          bg: 'bg-yellow-500/20',
+          border: 'border-yellow-500/30',
+          gradient: 'from-yellow-500 to-amber-600'
+        };
+      case 'HIGH':
+        return {
+          icon: AlertTriangle,
+          color: 'text-orange-400',
+          bg: 'bg-orange-500/20',
+          border: 'border-orange-500/30',
+          gradient: 'from-orange-500 to-red-600'
+        };
+      case 'CRITICAL':
+        return {
+          icon: AlertCircle,
+          color: 'text-red-400',
+          bg: 'bg-red-500/20',
+          border: 'border-red-500/30',
+          gradient: 'from-red-500 to-rose-600'
+        };
+      default:
+        return {
+          icon: Activity,
+          color: 'text-slate-400',
+          bg: 'bg-slate-500/20',
+          border: 'border-slate-500/30',
+          gradient: 'from-slate-500 to-gray-600'
+        };
     }
   };
 
-  const getRiskScoreColor = (score: number) => {
-    if (score <= 3) return 'text-green-400';
-    if (score <= 6) return 'text-yellow-400';
-    if (score <= 8) return 'text-orange-400';
-    return 'text-red-400';
-  };
-
-  const getRiskScoreBackground = (score: number) => {
-    if (score <= 3) return 'bg-green-500';
-    if (score <= 6) return 'bg-yellow-500';
-    if (score <= 8) return 'bg-orange-500';
-    return 'bg-red-500';
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'safe': return 'text-green-400';
-      case 'warning': return 'text-yellow-400';
-      case 'critical': return 'text-red-400';
-      default: return 'text-gray-400';
+  const getAlertConfig = (level: string) => {
+    switch (level) {
+      case 'warning':
+        return { icon: AlertTriangle, color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30' };
+      case 'danger':
+        return { icon: AlertCircle, color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/30' };
+      case 'critical':
+        return { icon: AlertCircle, color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/30' };
+      default:
+        return { icon: Activity, color: 'text-slate-400', bg: 'bg-slate-500/10', border: 'border-slate-500/30' };
     }
   };
 
-  const getStatusBackground = (status: string) => {
-    switch (status) {
-      case 'safe': return 'bg-green-500/20 border-green-500/30';
-      case 'warning': return 'bg-yellow-500/20 border-yellow-500/30';
-      case 'critical': return 'bg-red-500/20 border-red-500/30';
-      default: return 'bg-gray-500/20 border-gray-500/30';
-    }
-  };
+  if (loading && !metrics) {
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-8 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto mb-4"></div>
+        <p className="text-slate-400">Loading risk monitor...</p>
+      </div>
+    );
+  }
 
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'low': return 'text-blue-400';
-      case 'medium': return 'text-yellow-400';
-      case 'high': return 'text-orange-400';
-      case 'critical': return 'text-red-400';
-      default: return 'text-gray-400';
-    }
-  };
+  if (error && !metrics) {
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-xl border border-red-500/50 rounded-xl p-8 text-center">
+        <AlertCircle className="text-red-400 mx-auto mb-4" size={48} />
+        <p className="text-slate-50 mb-4">{error}</p>
+        <button 
+          onClick={fetchRiskMetrics}
+          className="bg-cyan-500 hover:bg-cyan-600 text-white px-6 py-2 rounded-lg transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!metrics) {
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-12 text-center">
+        <Shield className="w-12 h-12 mx-auto mb-4 text-slate-600" />
+        <p className="text-slate-400 mb-2">No Risk Data</p>
+        <p className="text-slate-500 text-sm">Risk metrics will appear when available</p>
+      </div>
+    );
+  }
+
+  const riskConfig = getRiskLevelConfig(metrics.current_risk_level);
+  const RiskIcon = riskConfig.icon;
 
   return (
-    <div className="space-y-4 lg:space-y-6">
-      {/* Header with Overall Risk Score - Responsive */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" />
-          <h2 className="text-xl sm:text-2xl font-bold text-white">Risk Monitor</h2>
-          <div className="flex items-center space-x-2 text-xs sm:text-sm text-gray-400">
-            <Activity className="w-3 h-3 sm:w-4 sm:h-4 animate-pulse" />
-            <span>Real-time</span>
+    <div className="space-y-6">
+      {/* Header */}
+      <motion.div 
+        className="flex items-center justify-between flex-wrap gap-4"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg bg-gradient-to-r ${riskConfig.gradient}`}>
+            <Shield className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-slate-50">Risk Monitor</h2>
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
+              <p className="text-sm text-slate-400">
+                {isConnected ? 'Real-time monitoring active' : 'Disconnected'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <motion.button
+          onClick={fetchRiskMetrics}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-50 rounded-lg font-medium transition-all disabled:opacity-50"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </motion.button>
+      </motion.div>
+
+      {/* Current Risk Level */}
+      <motion.div
+        className={`bg-slate-900/80 backdrop-blur-xl border ${riskConfig.border} shadow-xl rounded-xl p-6`}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.1 }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <RiskIcon className={`w-8 h-8 ${riskConfig.color}`} />
+            <div>
+              <h3 className="text-lg font-semibold text-slate-50">Current Risk Level</h3>
+              <p className="text-sm text-slate-400">Portfolio risk assessment</p>
+            </div>
+          </div>
+          <div className={`px-6 py-3 rounded-xl ${riskConfig.bg} ${riskConfig.border} border-2`}>
+            <span className={`text-2xl font-bold ${riskConfig.color}`}>
+              {metrics.current_risk_level}
+            </span>
           </div>
         </div>
         
-        <div className="flex flex-wrap items-center gap-4 sm:gap-6">
-          <div className="text-center">
-            <div className="text-xs sm:text-sm text-gray-400">Overall Risk Score</div>
-            <div className={`text-2xl sm:text-3xl font-bold ${getRiskScoreColor(overallRiskScore)}`}>
-              {overallRiskScore.toFixed(1)}/10
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs sm:text-sm text-gray-400">Portfolio VaR</div>
-            <div className="text-lg sm:text-xl font-bold text-yellow-400">
-              ${portfolioVar.toFixed(0)}
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs sm:text-sm text-gray-400">Max Drawdown</div>
-            <div className="text-lg sm:text-xl font-bold text-red-400">
-              {maxDrawdown.toFixed(1)}%
-            </div>
-          </div>
-          
-          <div className="relative w-20 h-20">
-            <svg className="w-20 h-20 transform -rotate-90">
-              <circle
-                cx="40"
-                cy="40"
-                r="35"
-                stroke="currentColor"
-                strokeWidth="6"
-                fill="none"
-                className="text-gray-700"
-              />
-              <circle
-                cx="40"
-                cy="40"
-                r="35"
-                stroke="currentColor"
-                strokeWidth="6"
-                fill="none"
-                strokeDasharray={`${2 * Math.PI * 35}`}
-                strokeDashoffset={`${2 * Math.PI * 35 * (1 - overallRiskScore / 10)}`}
-                className={getRiskScoreColor(overallRiskScore)}
-                strokeLinecap="round"
-              />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className={`text-lg font-bold ${getRiskScoreColor(overallRiskScore)}`}>
-                {Math.round((overallRiskScore / 10) * 100)}%
-              </span>
-            </div>
-          </div>
+        <div className="w-full bg-slate-700/50 rounded-full h-3">
+          <motion.div
+            className={`bg-gradient-to-r ${riskConfig.gradient} h-3 rounded-full`}
+            initial={{ width: 0 }}
+            animate={{ width: `${metrics.risk_score}%` }}
+            transition={{ duration: 1, ease: "easeOut" }}
+          />
         </div>
+        <div className="flex justify-between text-xs text-slate-400 mt-2">
+          <span>Safe</span>
+          <span>Risk Score: {metrics.risk_score}%</span>
+          <span>Critical</span>
+        </div>
+      </motion.div>
+
+      {/* Risk Metrics Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-slate-400 text-sm font-medium">Portfolio Risk</span>
+            <Percent className="text-cyan-400" size={18} />
+          </div>
+          <p className="text-3xl font-bold text-slate-50 mb-1">
+            {metrics.portfolio_risk.toFixed(2)}%
+          </p>
+          <p className="text-xs text-slate-500">Current exposure</p>
+        </motion.div>
+
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-slate-400 text-sm font-medium">VaR (95%)</span>
+            <DollarSign className="text-red-400" size={18} />
+          </div>
+          <p className="text-3xl font-bold text-red-400 mb-1">
+            ${metrics.var_95.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+          </p>
+          <p className="text-xs text-slate-500">Value at Risk</p>
+        </motion.div>
+
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-slate-400 text-sm font-medium">Sharpe Ratio</span>
+            <Activity className="text-purple-400" size={18} />
+          </div>
+          <p className="text-3xl font-bold text-purple-400 mb-1">
+            {metrics.sharpe_ratio.toFixed(2)}
+          </p>
+          <p className="text-xs text-slate-500">Risk-adjusted return</p>
+        </motion.div>
+
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-slate-400 text-sm font-medium">Max Drawdown</span>
+            <TrendingDown className="text-orange-400" size={18} />
+          </div>
+          <p className="text-3xl font-bold text-orange-400 mb-1">
+            {metrics.max_drawdown.toFixed(2)}%
+          </p>
+          <p className="text-xs text-slate-500">Historical maximum</p>
+        </motion.div>
       </div>
 
-      {/* Key Portfolio Metrics - Responsive */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-gray-800 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm text-gray-400">Portfolio VaR</div>
-              <div className="text-xl font-bold text-red-400">
-                ${portfolioVar.toLocaleString()}
-              </div>
+      {/* Detailed Metrics */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+        >
+          <h3 className="text-lg font-semibold text-slate-50 mb-4">Current Drawdown</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400">Current</span>
+              <span className="text-lg font-bold text-orange-400">{metrics.current_drawdown.toFixed(2)}%</span>
             </div>
-            <DollarSign className="w-8 h-8 text-red-400" />
-          </div>
-        </div>
-        
-        <div className="bg-gray-800 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm text-gray-400">Max Drawdown</div>
-              <div className="text-xl font-bold text-orange-400">
-                {maxDrawdown.toFixed(1)}%
-              </div>
+            <div className="w-full bg-slate-700/50 rounded-full h-2">
+              <div 
+                className="bg-orange-500 h-2 rounded-full transition-all duration-500"
+                style={{ width: `${(metrics.current_drawdown / metrics.max_drawdown) * 100}%` }}
+              ></div>
             </div>
-            <TrendingDown className="w-8 h-8 text-orange-400" />
-          </div>
-        </div>
-        
-        <div className="bg-gray-800 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm text-gray-400">Sharpe Ratio</div>
-              <div className="text-xl font-bold text-green-400">
-                {sharpeRatio.toFixed(2)}
-              </div>
+            <div className="flex justify-between text-xs text-slate-500">
+              <span>0%</span>
+              <span>Max: {metrics.max_drawdown.toFixed(2)}%</span>
             </div>
-            <TrendingUp className="w-8 h-8 text-green-400" />
           </div>
-        </div>
-        
-        <div className="bg-gray-800 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm text-gray-400">Active Alerts</div>
-              <div className="text-xl font-bold text-yellow-400">
-                {riskAlerts.length}
-              </div>
-            </div>
-            <AlertTriangle className="w-8 h-8 text-yellow-400" />
-          </div>
-        </div>
-      </div>
+        </motion.div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6">
-        {/* Risk Metrics */}
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center">
-            <Activity className="w-5 h-5 mr-2 text-blue-400" />
-            Risk Metrics
-          </h3>
-          
-          <div className="space-y-4">
-            {riskMetrics.map((metric, index) => (
-              <motion.div
-                key={metric.name}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className={`p-4 rounded-lg border ${getStatusBackground(metric.status)}`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-2">
-                    <span className="font-medium">{metric.name}</span>
-                    {metric.trend === 'up' && <TrendingUp className="w-4 h-4 text-red-400" />}
-                    {metric.trend === 'down' && <TrendingDown className="w-4 h-4 text-green-400" />}
-                    {metric.trend === 'stable' && <Activity className="w-4 h-4 text-gray-400" />}
-                  </div>
-                  <span className={`text-sm font-bold ${getStatusColor(metric.status)}`}>
-                    {metric.status.toUpperCase()}
-                  </span>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="text-2xl font-bold">
-                    {metric.value.toFixed(1)}{metric.unit}
-                  </div>
-                  <div className="text-sm text-gray-400">
-                    Limit: {metric.threshold.toFixed(1)}{metric.unit}
-                  </div>
-                </div>
-                
-                {/* Progress bar */}
-                <div className="mt-3">
-                  <div className="w-full bg-gray-700 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full transition-all duration-500 ${
-                        metric.status === 'critical' ? 'bg-red-500' :
-                        metric.status === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
-                      }`}
-                      style={{ width: `${Math.min((metric.value / metric.threshold) * 100, 100)}%` }}
-                    />
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7 }}
+        >
+          <h3 className="text-lg font-semibold text-slate-50 mb-4">Position Concentration</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400">Concentration</span>
+              <span className="text-lg font-bold text-cyan-400">{metrics.position_concentration.toFixed(2)}%</span>
+            </div>
+            <div className="w-full bg-slate-700/50 rounded-full h-2">
+              <div 
+                className="bg-cyan-500 h-2 rounded-full transition-all duration-500"
+                style={{ width: `${metrics.position_concentration}%` }}
+              ></div>
+            </div>
+            <div className="flex justify-between text-xs text-slate-500">
+              <span>Diversified</span>
+              <span>Concentrated</span>
+            </div>
           </div>
-        </div>
-
-        {/* Position Risks */}
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center">
-            <Zap className="w-5 h-5 mr-2 text-yellow-400" />
-            Position Risks
-          </h3>
-          
-          <div className="space-y-4">
-            {positionRisks.map((position, index) => (
-              <motion.div
-                key={position.symbol}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="p-4 bg-gray-700/50 rounded-lg"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="font-bold text-lg">{position.symbol}</span>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm text-gray-400">Risk Score:</span>
-                    <span className={`font-bold ${getRiskScoreColor(position.riskScore)}`}>
-                      {position.riskScore.toFixed(1)}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <div className="text-gray-400">Exposure</div>
-                    <div className="font-semibold">${position.exposure.toLocaleString()}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-400">VaR (1D)</div>
-                    <div className="font-semibold text-red-400">${position.var.toLocaleString()}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-400">Leverage</div>
-                    <div className="font-semibold">{position.leverage.toFixed(1)}x</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-400">Unrealized P&L</div>
-                    <div className={`font-semibold ${position.unrealizedPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      ${position.unrealizedPnl.toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Risk Alerts */}
-      <div className="bg-gray-800 rounded-lg p-6">
-        <h3 className="text-lg font-semibold mb-4 flex items-center">
-          <AlertTriangle className="w-5 h-5 mr-2 text-red-400" />
-          Risk Alerts
-        </h3>
-        
-        <div className="space-y-3">
-          {riskAlerts.map((alert, index) => (
-            <motion.div
-              key={alert.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="p-4 bg-gray-700/30 rounded-lg border border-gray-600"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-start space-x-3">
-                  <AlertCircle className={`w-5 h-5 mt-0.5 ${getSeverityColor(alert.severity)}`} />
-                  <div>
-                    <div className="font-medium">{alert.message}</div>
-                    {alert.symbol && (
-                      <div className="text-sm text-gray-400">Symbol: {alert.symbol}</div>
-                    )}
-                    <div className="text-sm text-gray-400">
-                      {alert.metric}: {alert.value.toFixed(2)} / {alert.threshold.toFixed(2)}
-                    </div>
+      {alerts.length > 0 && (
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8 }}
+        >
+          <h3 className="text-lg font-semibold text-slate-50 mb-4">Recent Alerts</h3>
+          <div className="space-y-3">
+            {alerts.map((alert, index) => {
+              const alertConfig = getAlertConfig(alert.level);
+              const AlertIcon = alertConfig.icon;
+
+              return (
+                <motion.div
+                  key={alert.id}
+                  className={`flex items-start gap-3 p-4 rounded-lg ${alertConfig.bg} border ${alertConfig.border}`}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                >
+                  <AlertIcon className={`w-5 h-5 ${alertConfig.color} flex-shrink-0 mt-0.5`} />
+                  <div className="flex-1">
+                    <p className="text-sm text-slate-200">{alert.message}</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {new Date(alert.timestamp).toLocaleString()}
+                    </p>
                   </div>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <span className={`px-2 py-1 rounded text-xs font-bold ${getSeverityColor(alert.severity)} bg-opacity-20`}>
-                    {alert.severity.toUpperCase()}
-                  </span>
-                  <div className="text-xs text-gray-500">
-                    {new Date(alert.timestamp).toLocaleTimeString()}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 };

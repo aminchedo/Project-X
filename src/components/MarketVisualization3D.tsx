@@ -1,344 +1,279 @@
-import React, { useState } from 'react';
-// Simplified version without 3D dependencies to avoid conflicts
-// import { Canvas, useFrame, useThree } from '@react-three/fiber';
-// import { OrbitControls, Text, Box, Sphere, Line } from '@react-three/drei';
-// import * as THREE from 'three';
+import React, { useEffect, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
+import { api } from '../services/api';
+import { Cube, RefreshCw, AlertCircle, Maximize2, Minimize2 } from 'lucide-react';
 
 interface MarketData {
   symbol: string;
   price: number;
-  volume: number;
-  change24h: number;
-  volatility: number;
+  change_24h: number;
+  volume_24h: number;
+  market_cap: number;
 }
 
-interface Market3DVisualizationProps {
-  marketData: MarketData[];
-  selectedSymbol?: string;
-  onSymbolSelect?: (symbol: string) => void;
+interface MarketVisualization3DProps {
+  symbols?: string[];
 }
 
-const MarketSphere: React.FC<{
-  data: MarketData;
-  position: [number, number, number];
-  isSelected: boolean;
-  onClick: () => void;
-}> = ({ data, position, isSelected, onClick }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const [hovered, setHovered] = useState(false);
-  
-  // Animate the sphere
-  useFrame((state) => {
-    if (meshRef.current) {
-      meshRef.current.rotation.y += 0.01;
-      meshRef.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * 2) * 0.1;
-    }
-  });
-  
-  // Calculate sphere properties based on data
-  const radius = Math.max(0.2, Math.min(2, data.volume / 10000));
-  const color = data.change24h >= 0 ? '#10b981' : '#ef4444';
-  const intensity = Math.abs(data.change24h) / 10;
-  
-  return (
-    <group position={position}>
-      <Sphere
-        ref={meshRef}
-        args={[radius, 32, 32]}
-        onClick={onClick}
-        onPointerOver={() => setHovered(true)}
-        onPointerOut={() => setHovered(false)}
-      >
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={intensity * 0.3}
-          transparent
-          opacity={isSelected ? 1 : 0.8}
-          wireframe={hovered}
-        />
-      </Sphere>
-      
-      {/* Price label */}
-      <Text
-        position={[0, radius + 0.5, 0]}
-        fontSize={0.3}
-        color="white"
-        anchorX="center"
-        anchorY="middle"
-      >
-        {data.symbol}
-      </Text>
-      
-      <Text
-        position={[0, radius + 0.2, 0]}
-        fontSize={0.2}
-        color={color}
-        anchorX="center"
-        anchorY="middle"
-      >
-        ${data.price.toFixed(2)}
-      </Text>
-      
-      {/* Volatility indicator */}
-      <Box
-        position={[0, -radius - 0.3, 0]}
-        args={[data.volatility * 2, 0.1, 0.1]}
-      >
-        <meshStandardMaterial color="#fbbf24" />
-      </Box>
-    </group>
-  );
-};
-
-const ConnectionLines: React.FC<{ marketData: MarketData[] }> = ({ marketData }) => {
-  const lines = useMemo(() => {
-    const connections = [];
-    for (let i = 0; i < marketData.length; i++) {
-      for (let j = i + 1; j < marketData.length; j++) {
-        // Create correlation-based connections
-        const correlation = Math.random() * 0.8 + 0.2; // Mock correlation
-        if (correlation > 0.6) {
-          const angle1 = (i / marketData.length) * Math.PI * 2;
-          const angle2 = (j / marketData.length) * Math.PI * 2;
-          const radius = 5;
-          
-          const pos1: [number, number, number] = [
-            Math.cos(angle1) * radius,
-            0,
-            Math.sin(angle1) * radius
-          ];
-          const pos2: [number, number, number] = [
-            Math.cos(angle2) * radius,
-            0,
-            Math.sin(angle2) * radius
-          ];
-          
-          connections.push({
-            points: [pos1, pos2],
-            color: correlation > 0 ? '#10b981' : '#ef4444',
-            opacity: correlation * 0.5
-          });
-        }
-      }
-    }
-    return connections;
-  }, [marketData]);
-  
-  return (
-    <>
-      {lines.map((line, index) => (
-        <Line
-          key={index}
-          points={line.points}
-          color={line.color}
-          lineWidth={2}
-          transparent
-          opacity={line.opacity}
-        />
-      ))}
-    </>
-  );
-};
-
-const PriceGrid: React.FC = () => {
-  const gridRef = useRef<THREE.Group>(null);
-  
-  useFrame(() => {
-    if (gridRef.current) {
-      gridRef.current.rotation.y += 0.002;
-    }
-  });
-  
-  return (
-    <group ref={gridRef}>
-      {/* Create a grid of price levels */}
-      {Array.from({ length: 10 }, (_, i) => (
-        <React.Fragment key={i}>
-          <Line
-            points={[[-8, i - 5, -8], [8, i - 5, -8]]}
-            color="#374151"
-            lineWidth={1}
-            transparent
-            opacity={0.3}
-          />
-          <Line
-            points={[[-8, i - 5, 8], [8, i - 5, 8]]}
-            color="#374151"
-            lineWidth={1}
-            transparent
-            opacity={0.3}
-          />
-          <Line
-            points={[[-8, i - 5, -8], [-8, i - 5, 8]]}
-            color="#374151"
-            lineWidth={1}
-            transparent
-            opacity={0.3}
-          />
-          <Line
-            points={[[8, i - 5, -8], [8, i - 5, 8]]}
-            color="#374151"
-            lineWidth={1}
-            transparent
-            opacity={0.3}
-          />
-        </React.Fragment>
-      ))}
-    </group>
-  );
-};
-
-const CameraController: React.FC = () => {
-  const { camera } = useThree();
-  
-  useEffect(() => {
-    camera.position.set(10, 5, 10);
-    camera.lookAt(0, 0, 0);
-  }, [camera]);
-  
-  return null;
-};
-
-const Market3DVisualization: React.FC<Market3DVisualizationProps> = ({
-  marketData,
-  selectedSymbol,
-  onSymbolSelect
+const MarketVisualization3D: React.FC<MarketVisualization3DProps> = ({ 
+  symbols = ['BTC', 'ETH', 'BNB', 'SOL', 'ADA', 'XRP', 'DOT', 'AVAX', 'MATIC', 'LINK']
 }) => {
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  
-  return (
-    <div className="w-full h-96 bg-gray-900 rounded-lg overflow-hidden relative">
-      <div className="absolute top-4 left-4 z-10 flex space-x-2">
-        <button
-          onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-          className="px-3 py-1 text-xs rounded bg-blue-500 text-white hover:bg-blue-600"
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [data, setData] = useState<MarketData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [rotation, setRotation] = useState({ x: 0, y: 0 });
+  const animationRef = useRef<number>();
+
+  useEffect(() => {
+    fetchMarketData();
+    const interval = setInterval(fetchMarketData, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (data.length > 0) {
+      startAnimation();
+    }
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [data, rotation]);
+
+  const fetchMarketData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await api.crypto.getMarketOverview();
+      setData(response.slice(0, symbols.length));
+    } catch (err) {
+      setError('Failed to load market data');
+      console.error('Market data error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startAnimation = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const width = canvas.width;
+    const height = canvas.height;
+
+    // Clear canvas
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, width, height);
+
+    // Draw 3D visualization (simplified without Three.js)
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const radius = Math.min(width, height) / 3;
+
+    // Auto-rotation
+    setRotation(prev => ({
+      x: prev.x + 0.002,
+      y: prev.y + 0.001
+    }));
+
+    // Draw bubbles for each crypto
+    data.forEach((item, index) => {
+      const angle = (index / data.length) * Math.PI * 2 + rotation.y;
+      const elevationAngle = Math.sin(rotation.x) * 0.5;
+      
+      // 3D position
+      const x = centerX + Math.cos(angle) * radius * Math.cos(elevationAngle);
+      const y = centerY + Math.sin(angle) * radius * Math.cos(elevationAngle) + Math.sin(rotation.x) * 50;
+      const z = Math.sin(elevationAngle) * radius;
+      
+      // Size based on market cap (depth illusion)
+      const baseSize = Math.sqrt(item.market_cap / 1000000000) * 10;
+      const size = baseSize * (1 + z / radius * 0.5);
+      
+      // Color based on 24h change
+      const color = item.change_24h >= 0 
+        ? `rgba(74, 222, 128, ${0.6 + z / radius * 0.4})` 
+        : `rgba(248, 113, 113, ${0.6 + z / radius * 0.4})`;
+      
+      // Draw bubble
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      
+      // Draw border
+      ctx.strokeStyle = item.change_24h >= 0 ? '#4ade80' : '#f87171';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // Draw symbol
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = `bold ${Math.max(12, size / 3)}px Inter`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(item.symbol, x, y);
+      
+      // Draw change percentage
+      ctx.font = `${Math.max(10, size / 4)}px Inter`;
+      ctx.fillText(
+        `${item.change_24h >= 0 ? '+' : ''}${item.change_24h.toFixed(2)}%`,
+        x,
+        y + size / 2 + 15
+      );
+    });
+
+    // Draw connecting lines
+    ctx.strokeStyle = 'rgba(100, 116, 139, 0.2)';
+    ctx.lineWidth = 1;
+    data.forEach((item, i) => {
+      if (i < data.length - 1) {
+        const angle1 = (i / data.length) * Math.PI * 2 + rotation.y;
+        const angle2 = ((i + 1) / data.length) * Math.PI * 2 + rotation.y;
+        const elevationAngle = Math.sin(rotation.x) * 0.5;
+        
+        const x1 = centerX + Math.cos(angle1) * radius * Math.cos(elevationAngle);
+        const y1 = centerY + Math.sin(angle1) * radius * Math.cos(elevationAngle);
+        const x2 = centerX + Math.cos(angle2) * radius * Math.cos(elevationAngle);
+        const y2 = centerY + Math.sin(angle2) * radius * Math.cos(elevationAngle);
+        
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+    });
+
+    animationRef.current = requestAnimationFrame(startAnimation);
+  };
+
+  const handleCanvasResize = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const container = canvas.parentElement;
+    if (!container) return;
+    
+    canvas.width = container.clientWidth;
+    canvas.height = isFullscreen ? window.innerHeight : 600;
+  };
+
+  useEffect(() => {
+    handleCanvasResize();
+    window.addEventListener('resize', handleCanvasResize);
+    return () => window.removeEventListener('resize', handleCanvasResize);
+  }, [isFullscreen]);
+
+  if (loading && data.length === 0) {
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-8 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500 mx-auto mb-4"></div>
+        <p className="text-slate-400">Loading 3D visualization...</p>
+      </div>
+    );
+  }
+
+  if (error && data.length === 0) {
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-xl border border-red-500/50 rounded-xl p-8 text-center">
+        <AlertCircle className="text-red-400 mx-auto mb-4" size={48} />
+        <p className="text-slate-50 mb-4">{error}</p>
+        <button 
+          onClick={fetchMarketData}
+          className="bg-cyan-500 hover:bg-cyan-600 text-white px-6 py-2 rounded-lg transition-colors"
         >
-          {viewMode === 'grid' ? 'List View' : 'Grid View'}
+          Retry
         </button>
       </div>
-      
-      {/* Simplified 2D visualization instead of 3D */}
-      <div className="p-8 pt-16 h-full overflow-auto">
-        {viewMode === 'grid' ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {marketData.map((data) => (
-              <div
-                key={data.symbol}
-                onClick={() => onSymbolSelect?.(data.symbol)}
-                className={`p-4 rounded-lg cursor-pointer transition-all duration-200 ${
-                  selectedSymbol === data.symbol
-                    ? 'bg-blue-600 shadow-lg scale-105'
-                    : data.change24h >= 0
-                    ? 'bg-green-600/20 hover:bg-green-600/30'
-                    : 'bg-red-600/20 hover:bg-red-600/30'
-                } border ${
-                  selectedSymbol === data.symbol
-                    ? 'border-blue-400'
-                    : data.change24h >= 0
-                    ? 'border-green-500/30'
-                    : 'border-red-500/30'
-                }`}
-              >
-                <div className="text-center">
-                  <div className="text-lg font-bold text-white mb-2">{data.symbol}</div>
-                  <div className="text-2xl font-mono text-white mb-1">
-                    ${data.price.toFixed(2)}
-                  </div>
-                  <div className={`text-sm font-semibold ${
-                    data.change24h >= 0 ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {data.change24h >= 0 ? '+' : ''}{data.change24h.toFixed(2)}%
-                  </div>
-                  <div className="text-xs text-gray-400 mt-2">
-                    Vol: {(data.volume / 1000000).toFixed(1)}M
-                  </div>
-                  
-                  {/* Volatility bar */}
-                  <div className="mt-2">
-                    <div className="text-xs text-gray-400 mb-1">Volatility</div>
-                    <div className="w-full bg-gray-700 rounded-full h-2">
-                      <div
-                        className="bg-yellow-500 h-2 rounded-full transition-all duration-500"
-                        style={{ width: `${Math.min(data.volatility * 200, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+    );
+  }
+
+  return (
+    <div className={`space-y-6 ${isFullscreen ? 'fixed inset-0 z-50 bg-slate-950 p-6' : ''}`}>
+      {/* Header */}
+      <motion.div 
+        className="flex items-center justify-between flex-wrap gap-4"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-600">
+            <Cube className="w-6 h-6 text-white" />
           </div>
-        ) : (
-          <div className="space-y-3">
-            {marketData.map((data) => (
-              <div
-                key={data.symbol}
-                onClick={() => onSymbolSelect?.(data.symbol)}
-                className={`flex items-center justify-between p-4 rounded-lg cursor-pointer transition-all duration-200 ${
-                  selectedSymbol === data.symbol
-                    ? 'bg-blue-600 shadow-lg'
-                    : data.change24h >= 0
-                    ? 'bg-green-600/20 hover:bg-green-600/30'
-                    : 'bg-red-600/20 hover:bg-red-600/30'
-                } border ${
-                  selectedSymbol === data.symbol
-                    ? 'border-blue-400'
-                    : data.change24h >= 0
-                    ? 'border-green-500/30'
-                    : 'border-red-500/30'
-                }`}
-              >
-                <div className="flex items-center space-x-4">
-                  <div className="text-lg font-bold text-white">{data.symbol}</div>
-                  <div className="text-xl font-mono text-white">
-                    ${data.price.toFixed(2)}
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-4">
-                  <div className={`text-sm font-semibold ${
-                    data.change24h >= 0 ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {data.change24h >= 0 ? '+' : ''}{data.change24h.toFixed(2)}%
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    Vol: {(data.volume / 1000000).toFixed(1)}M
-                  </div>
-                  <div className="w-16 bg-gray-700 rounded-full h-2">
-                    <div
-                      className="bg-yellow-500 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(data.volatility * 200, 100)}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      
-      {/* Legend */}
-      <div className="absolute bottom-4 left-4 bg-black bg-opacity-60 text-white p-3 rounded text-xs">
-        <div className="space-y-1">
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-            <span>Positive Change</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-            <span>Negative Change</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-6 h-1 bg-yellow-500"></div>
-            <span>Volatility</span>
-          </div>
-          <div className="text-gray-400">
-            Click to select symbol
+          <div>
+            <h2 className="text-2xl font-bold text-slate-50">3D Market Visualization</h2>
+            <p className="text-sm text-slate-400">Interactive real-time market overview</p>
           </div>
         </div>
-      </div>
+
+        <div className="flex gap-2">
+          <motion.button
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-50 rounded-lg transition-all"
+          >
+            {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+          </motion.button>
+
+          <motion.button
+            onClick={fetchMarketData}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            disabled={loading}
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-50 rounded-lg transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </motion.button>
+        </div>
+      </motion.div>
+
+      {/* Canvas */}
+      <motion.div
+        className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl overflow-hidden"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <canvas
+          ref={canvasRef}
+          className="w-full cursor-move"
+          onMouseMove={(e) => {
+            if (e.buttons === 1) {
+              setRotation(prev => ({
+                x: prev.x + e.movementY * 0.01,
+                y: prev.y + e.movementX * 0.01
+              }));
+            }
+          }}
+        />
+      </motion.div>
+
+      {/* Legend */}
+      {!isFullscreen && (
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <h3 className="text-lg font-semibold text-slate-50 mb-4">How to Use</h3>
+          <ul className="text-sm text-slate-300 space-y-2">
+            <li>• <strong>Bubble size:</strong> Represents market capitalization</li>
+            <li>• <strong>Green bubbles:</strong> Positive 24h price change</li>
+            <li>• <strong>Red bubbles:</strong> Negative 24h price change</li>
+            <li>• <strong>Click and drag:</strong> Rotate the visualization</li>
+            <li>• <strong>Auto-rotation:</strong> Enabled by default for better viewing</li>
+          </ul>
+        </motion.div>
+      )}
     </div>
   );
 };
 
-export default Market3DVisualization;
+export default MarketVisualization3D;

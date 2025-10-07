@@ -1,142 +1,320 @@
-import React, { useState } from 'react';
-import { Search, X, Plus } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, X, TrendingUp, Star, Clock } from 'lucide-react';
 
-interface SymbolInputProps {
-  symbols: string[];
-  onChange: (symbols: string[]) => void;
-  disabled?: boolean;
+interface Symbol {
+  symbol: string;
+  name: string;
+  price: number;
+  change_24h: number;
+  volume_24h: number;
+  market_cap: number;
+  isFavorite?: boolean;
 }
 
-const SymbolInput: React.FC<SymbolInputProps> = ({ symbols, onChange, disabled }) => {
-  const [inputValue, setInputValue] = useState('');
-  const [showSuggestions, setShowSuggestions] = useState(false);
+interface SymbolInputProps {
+  selectedSymbols: string[];
+  onSymbolsChange: (symbols: string[]) => void;
+  maxSymbols?: number;
+  placeholder?: string;
+}
 
-  // Popular symbols for autocomplete
-  const popularSymbols = [
-    'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT',
-    'DOGEUSDT', 'MATICUSDT', 'DOTUSDT', 'LTCUSDT', 'AVAXUSDT', 'LINKUSDT',
-    'UNIUSDT', 'ATOMUSDT', 'ETCUSDT', 'XLMUSDT', 'NEARUSDT', 'ALGOUSDT',
-  ];
+const SymbolInput: React.FC<SymbolInputProps> = ({
+  selectedSymbols,
+  onSymbolsChange,
+  maxSymbols = 10,
+  placeholder = 'Search and add symbols...'
+}) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [suggestions, setSuggestions] = useState<Symbol[]>([]);
+  const [recentSymbols, setRecentSymbols] = useState<string[]>([]);
+  const [favoriteSymbols, setFavoriteSymbols] = useState<string[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const suggestions = popularSymbols.filter(
-    s => s.toLowerCase().includes(inputValue.toLowerCase()) && !symbols.includes(s)
-  ).slice(0, 8);
+  // Popular symbols
+  const popularSymbols = ['BTC', 'ETH', 'BNB', 'SOL', 'ADA', 'XRP', 'DOT', 'AVAX', 'MATIC', 'LINK'];
+
+  useEffect(() => {
+    // Load favorites and recent from localStorage
+    const stored = localStorage.getItem('favoriteSymbols');
+    if (stored) setFavoriteSymbols(JSON.parse(stored));
+    
+    const recent = localStorage.getItem('recentSymbols');
+    if (recent) setRecentSymbols(JSON.parse(recent));
+  }, []);
+
+  useEffect(() => {
+    // Close dropdown when clicking outside
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (searchTerm.length >= 1) {
+      // Filter suggestions based on search
+      const filtered = popularSymbols
+        .filter(s => s.toLowerCase().includes(searchTerm.toLowerCase()))
+        .map(s => ({
+          symbol: s,
+          name: `${s} Token`,
+          price: Math.random() * 10000,
+          change_24h: (Math.random() - 0.5) * 10,
+          volume_24h: Math.random() * 1000000000,
+          market_cap: Math.random() * 100000000000,
+          isFavorite: favoriteSymbols.includes(s)
+        }));
+      setSuggestions(filtered);
+      setIsOpen(true);
+    } else {
+      setSuggestions([]);
+      setIsOpen(false);
+    }
+  }, [searchTerm, favoriteSymbols]);
 
   const handleAddSymbol = (symbol: string) => {
-    const normalized = symbol.trim().toUpperCase();
-    if (normalized && !symbols.includes(normalized)) {
-      onChange([...symbols, normalized]);
+    if (selectedSymbols.length >= maxSymbols) {
+      alert(`Maximum ${maxSymbols} symbols allowed`);
+      return;
     }
-    setInputValue('');
-    setShowSuggestions(false);
+
+    if (!selectedSymbols.includes(symbol)) {
+      onSymbolsChange([...selectedSymbols, symbol]);
+      
+      // Add to recent symbols
+      const updated = [symbol, ...recentSymbols.filter(s => s !== symbol)].slice(0, 10);
+      setRecentSymbols(updated);
+      localStorage.setItem('recentSymbols', JSON.stringify(updated));
+    }
+
+    setSearchTerm('');
+    setIsOpen(false);
+    inputRef.current?.focus();
   };
 
   const handleRemoveSymbol = (symbol: string) => {
-    onChange(symbols.filter(s => s !== symbol));
+    onSymbolsChange(selectedSymbols.filter(s => s !== symbol));
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (inputValue.trim()) {
-        handleAddSymbol(inputValue);
-      }
-    } else if (e.key === 'Escape') {
-      setShowSuggestions(false);
+  const toggleFavorite = (symbol: string) => {
+    const updated = favoriteSymbols.includes(symbol)
+      ? favoriteSymbols.filter(s => s !== symbol)
+      : [...favoriteSymbols, symbol];
+    
+    setFavoriteSymbols(updated);
+    localStorage.setItem('favoriteSymbols', JSON.stringify(updated));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && suggestions.length > 0) {
+      handleAddSymbol(suggestions[0].symbol);
     }
   };
 
-  const handleInputChange = (value: string) => {
-    setInputValue(value);
-    setShowSuggestions(value.length > 0);
-  };
-
   return (
-    <div className="space-y-3">
-      <label className="block text-sm font-semibold text-slate-300">
-        📊 نمادها ({symbols.length} انتخاب شده)
-      </label>
-      
-      {/* Selected Symbols */}
-      {symbols.length > 0 && (
-        <div className="flex flex-wrap gap-2 p-3 bg-slate-900/50 rounded-lg border border-slate-700/30">
-          {symbols.map((symbol) => (
-            <span
-              key={symbol}
-              className="inline-flex items-center gap-1 px-3 py-1 bg-slate-700/50 text-slate-200 rounded-lg text-sm font-medium border border-slate-600/30"
-            >
-              {symbol}
-              <button
-                onClick={() => handleRemoveSymbol(symbol)}
-                disabled={disabled}
-                className="p-0.5 hover:bg-red-500/20 rounded transition-colors disabled:opacity-50"
-                aria-label={`حذف ${symbol}`}
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      
-      {/* Input with Autocomplete */}
-      <div className="relative">
-        <div className="relative">
-          <label htmlFor="symbol-input" className="sr-only">
-            Add Trading Symbol
-          </label>
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+    <div className="relative" ref={dropdownRef}>
+      {/* Input Area */}
+      <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Search className="w-5 h-5 text-slate-400" />
           <input
-            id="symbol-input"
-            name="symbol-input"
+            ref={inputRef}
             type="text"
-            value={inputValue}
-            onChange={(e) => handleInputChange(e.target.value)}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onFocus={() => setIsOpen(true)}
             onKeyDown={handleKeyDown}
-            onFocus={() => inputValue && setShowSuggestions(true)}
-            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-            placeholder="نماد را تایپ کنید (مثال: BTCUSDT)"
-            disabled={disabled}
-            className="w-full px-4 py-3 pr-10 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:border-cyan-500/50 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+            placeholder={placeholder}
+            disabled={selectedSymbols.length >= maxSymbols}
+            className="flex-1 bg-transparent text-slate-50 placeholder-slate-500 focus:outline-none"
           />
-          {inputValue && (
-            <button
-              onClick={() => {
-                setInputValue('');
-                setShowSuggestions(false);
-              }}
-              className="absolute left-3 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-600/50 rounded transition-colors"
-              aria-label="پاک کردن"
-            >
-              <X className="w-4 h-4 text-slate-400" />
-            </button>
+          {selectedSymbols.length > 0 && (
+            <span className="text-sm text-slate-400">
+              {selectedSymbols.length}/{maxSymbols}
+            </span>
           )}
         </div>
-        
-        {/* Suggestions Dropdown */}
-        {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute z-10 mt-2 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden">
-            <div className="p-2 text-xs text-slate-400 border-b border-slate-700">
-              پیشنهادات:
-            </div>
-            {suggestions.map((symbol) => (
-              <button
-                key={symbol}
-                onClick={() => handleAddSymbol(symbol)}
-                className="w-full px-4 py-2 text-right hover:bg-slate-700/50 text-slate-200 transition-colors flex items-center justify-between group"
-              >
-                <span className="font-medium">{symbol}</span>
-                <Plus className="w-4 h-4 text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
-            ))}
+
+        {/* Selected Symbols */}
+        {selectedSymbols.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            <AnimatePresence mode="popLayout">
+              {selectedSymbols.map((symbol) => (
+                <motion.div
+                  key={symbol}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 rounded-lg"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  layout
+                >
+                  <span className="font-semibold">{symbol}</span>
+                  <button
+                    onClick={() => handleRemoveSymbol(symbol)}
+                    className="hover:bg-cyan-500/30 rounded p-0.5 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         )}
       </div>
-      
-      {/* Helper Text */}
-      <p className="text-xs text-slate-400">
-        💡 نماد را تایپ کنید و Enter بزنید. حداقل ۱ نماد لازم است.
-      </p>
+
+      {/* Dropdown Suggestions */}
+      <AnimatePresence>
+        {isOpen && (searchTerm || (!searchTerm && selectedSymbols.length === 0)) && (
+          <motion.div
+            className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-20"
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+          >
+            {/* Search Results */}
+            {suggestions.length > 0 && (
+              <div className="max-h-64 overflow-y-auto">
+                <div className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800">
+                  Search Results
+                </div>
+                {suggestions.map((item) => (
+                  <button
+                    key={item.symbol}
+                    onClick={() => handleAddSymbol(item.symbol)}
+                    disabled={selectedSymbols.includes(item.symbol)}
+                    className={`w-full flex items-center justify-between p-3 hover:bg-slate-800 transition-colors text-left ${
+                      selectedSymbols.includes(item.symbol) ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 flex-1">
+                      <div>
+                        <div className="font-semibold text-slate-50">{item.symbol}</div>
+                        <div className="text-xs text-slate-400">{item.name}</div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <div className="text-sm font-semibold text-slate-50">
+                          ${item.price.toLocaleString()}
+                        </div>
+                        <div className={`text-xs font-semibold ${
+                          item.change_24h >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {item.change_24h >= 0 ? '+' : ''}{item.change_24h.toFixed(2)}%
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(item.symbol);
+                        }}
+                        className="p-1 hover:bg-slate-700 rounded transition-colors"
+                      >
+                        <Star className={`w-4 h-4 ${
+                          item.isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-slate-500'
+                        }`} />
+                      </button>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Quick Access Sections */}
+            {!searchTerm && (
+              <>
+                {/* Favorites */}
+                {favoriteSymbols.length > 0 && (
+                  <div>
+                    <div className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 flex items-center gap-2">
+                      <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                      Favorites
+                    </div>
+                    <div className="flex flex-wrap gap-2 p-3">
+                      {favoriteSymbols.map((symbol) => (
+                        <button
+                          key={symbol}
+                          onClick={() => handleAddSymbol(symbol)}
+                          disabled={selectedSymbols.includes(symbol)}
+                          className={`px-3 py-1.5 bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 rounded-lg text-sm font-semibold hover:bg-yellow-500/30 transition-colors ${
+                            selectedSymbols.includes(symbol) ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                        >
+                          {symbol}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recent */}
+                {recentSymbols.length > 0 && (
+                  <div>
+                    <div className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 flex items-center gap-2">
+                      <Clock className="w-3 h-3" />
+                      Recent
+                    </div>
+                    <div className="flex flex-wrap gap-2 p-3">
+                      {recentSymbols.slice(0, 5).map((symbol) => (
+                        <button
+                          key={symbol}
+                          onClick={() => handleAddSymbol(symbol)}
+                          disabled={selectedSymbols.includes(symbol)}
+                          className={`px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-300 rounded-lg text-sm font-semibold hover:bg-slate-700 transition-colors ${
+                            selectedSymbols.includes(symbol) ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                        >
+                          {symbol}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Popular */}
+                <div>
+                  <div className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 flex items-center gap-2">
+                    <TrendingUp className="w-3 h-3" />
+                    Popular
+                  </div>
+                  <div className="flex flex-wrap gap-2 p-3">
+                    {popularSymbols.slice(0, 8).map((symbol) => (
+                      <button
+                        key={symbol}
+                        onClick={() => handleAddSymbol(symbol)}
+                        disabled={selectedSymbols.includes(symbol)}
+                        className={`px-3 py-1.5 bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 rounded-lg text-sm font-semibold hover:bg-cyan-500/30 transition-colors ${
+                          selectedSymbols.includes(symbol) ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        {symbol}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* No Results */}
+            {searchTerm && suggestions.length === 0 && (
+              <div className="p-8 text-center text-slate-400">
+                <Search className="w-12 h-12 mx-auto mb-2 text-slate-600" />
+                <p className="text-sm">No symbols found for "{searchTerm}"</p>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
