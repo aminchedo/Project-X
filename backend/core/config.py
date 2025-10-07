@@ -4,6 +4,9 @@ Includes weights, thresholds, and feature flags for GA/RL optimization
 """
 
 from typing import Dict, Any
+import json
+import os
+from pathlib import Path
 from pydantic import BaseModel, Field
 
 
@@ -56,12 +59,45 @@ class RiskPolicy(BaseModel):
     news_impact_reduction: float = Field(default=0.5, ge=0.1, le=1.0)
 
 
+class RegimeMultipliers(BaseModel):
+    """Dynamic weight multipliers per market regime"""
+    news_window: Dict[str, float] = Field(
+        default_factory=lambda: {"SMC_ZQS": 0.7, "LIQ_GRAB": 1.15, "Sentiment": 1.2}
+    )
+    high_vol: Dict[str, float] = Field(
+        default_factory=lambda: {"SMC_ZQS": 0.85, "FVG_ATR": 1.1}
+    )
+    wide_spread: Dict[str, float] = Field(
+        default_factory=lambda: {"SMC_ZQS": 0.8}
+    )
+    trend: Dict[str, float] = Field(
+        default_factory=lambda: {"SMC_ZQS": 1.1, "RSI": 1.05, "MACD": 1.05}
+    )
+    range: Dict[str, float] = Field(
+        default_factory=lambda: {"SMC_ZQS": 1.05, "LIQ_GRAB": 1.1}
+    )
+
+
+class OnlineAdaptation(BaseModel):
+    """Online learning parameters for EWMA weight adjustment"""
+    alpha: float = Field(default=0.2, ge=0.0, le=1.0, description="Learning rate for EWMA")
+    clip_min: float = Field(default=0.5, ge=0.1, le=1.0, description="Minimum multiplier")
+    clip_max: float = Field(default=1.5, ge=1.0, le=3.0, description="Maximum multiplier")
+    decay: float = Field(default=0.94, ge=0.0, le=1.0, description="Decay rate for EWMA")
+    per_signal: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Per-signal EWMA multipliers (learned online)"
+    )
+
+
 class TradingConfig(BaseModel):
     """Complete trading system configuration"""
     weights: SignalWeights = Field(default_factory=SignalWeights)
     thresholds: Thresholds = Field(default_factory=Thresholds)
     risk: RiskPolicy = Field(default_factory=RiskPolicy)
     smc: SMCConfig = Field(default_factory=SMCConfig)
+    regime_multipliers: RegimeMultipliers = Field(default_factory=RegimeMultipliers)
+    online_adaptation: OnlineAdaptation = Field(default_factory=OnlineAdaptation)
     
     def model_post_init(self, __context: Any) -> None:
         """Validate after initialization"""
@@ -97,3 +133,44 @@ def update_config(updates: Dict[str, Any]) -> TradingConfig:
             config_dict[key] = value
     
     return TradingConfig(**config_dict)
+
+
+# AI Config persistence (for dynamic weights)
+AI_CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "ai_config.json"
+
+
+def load_ai_config() -> Dict[str, Any]:
+    """
+    Load AI configuration from JSON file
+    
+    Returns:
+        Configuration dictionary with weights, regime_multipliers, online_adaptation, etc.
+    """
+    if not AI_CONFIG_PATH.exists():
+        # Return default config as dict
+        return DEFAULT_CONFIG.model_dump()
+    
+    try:
+        with open(AI_CONFIG_PATH, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        # If loading fails, return default
+        return DEFAULT_CONFIG.model_dump()
+
+
+def save_ai_config(config: Dict[str, Any]) -> None:
+    """
+    Save AI configuration to JSON file
+    
+    Args:
+        config: Configuration dictionary to save
+    """
+    # Ensure config directory exists
+    AI_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        with open(AI_CONFIG_PATH, 'w') as f:
+            json.dump(config, f, indent=2)
+    except Exception as e:
+        # Log error but don't crash
+        print(f"Error saving AI config: {e}")

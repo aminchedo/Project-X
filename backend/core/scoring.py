@@ -5,23 +5,37 @@ Combines traditional indicators with Smart Money Concepts
 
 from typing import Dict, List, Optional
 import structlog
+from backend.core.dynamic_weights import adjust_weights
 
 logger = structlog.get_logger()
 
 
-def weighted_score(signals: Dict[str, float], weights: Dict[str, float]) -> float:
+def weighted_score(
+    signals: Dict[str, float], 
+    weights: Dict[str, float],
+    context: Optional[Dict] = None
+) -> float:
     """
-    Calculate weighted score from signals
+    Calculate weighted score from signals with dynamic weight adjustment
     
     Args:
         signals: Dictionary of signal values {signal_name: value}
-        weights: Dictionary of weights {signal_name: weight}
+        weights: Base dictionary of weights {signal_name: weight}
+        context: Optional market context for dynamic weight adjustment
+            Expected keys: atr_pct, spread_bp, htf_trend, realized_vol, news_high_impact
     
     Returns:
         Weighted score (0..1 range typically)
     """
+    # Apply dynamic weight adjustment if context provided
+    if context:
+        eff_weights = adjust_weights(weights, context)
+    else:
+        eff_weights = weights
+    
+    # Calculate weighted sum
     s = wsum = 0.0
-    for k, w in weights.items():
+    for k, w in eff_weights.items():
         if k in signals:
             s += float(signals[k]) * w
             wsum += w
@@ -58,16 +72,19 @@ def normalize_signals(signals: Dict[str, float]) -> Dict[str, float]:
 def compute_entry_score(
     signals: Dict[str, float],
     weights: Dict[str, float],
-    smc_features: Optional[Dict[str, float]] = None
+    smc_features: Optional[Dict[str, float]] = None,
+    context: Optional[Dict] = None
 ) -> float:
     """
-    Compute entry score including SMC features
+    Compute entry score including SMC features and dynamic weights
     
     Args:
         signals: Base signals (RSI, MACD, Sentiment, SAR, etc.)
-        weights: Signal weights
+        weights: Base signal weights
         smc_features: SMC features from compute_smc_features()
             Expected keys: HTF_TREND, FVG_ATR, SMC_ZQS, LIQ_NEAR
+        context: Market context for dynamic weight adjustment
+            Expected keys: atr_pct, spread_bp, htf_trend, realized_vol, news_high_impact
     
     Returns:
         Entry score (0..1)
@@ -84,14 +101,15 @@ def compute_entry_score(
     # Normalize signals
     normalized = normalize_signals(combined_signals)
     
-    # Calculate weighted score
-    entry_score = weighted_score(normalized, weights)
+    # Calculate weighted score with dynamic weights
+    entry_score = weighted_score(normalized, weights, context)
     
     logger.info(
         "Entry score computed",
         signals=len(combined_signals),
         entry_score=round(entry_score, 3),
-        has_smc=smc_features is not None
+        has_smc=smc_features is not None,
+        has_context=context is not None
     )
     
     return entry_score
