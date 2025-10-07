@@ -10,6 +10,7 @@ export type StrategyState = {
   gates:  { rsi_macd: boolean; smc: boolean; sentiment: boolean; countertrend: boolean }
   risk:   { atr_pct: number; size: number; circuit: boolean }
   regime: { news: boolean; highVol: boolean; wideSpread: boolean; trend: boolean }
+  reasons: string[]  // why_block or decision notes
 }
 
 export const strategy$ = new Observable<StrategyState>({
@@ -21,7 +22,8 @@ export const strategy$ = new Observable<StrategyState>({
   scores: { entry: 0, conf: 0, SMC_ZQS: 0, FVG_ATR: 0, LIQ: 0 },
   gates:  { rsi_macd: false, smc: false, sentiment: false, countertrend: false },
   risk:   { atr_pct: 0, size: 0, circuit: false },
-  regime: { news: false, highVol: false, wideSpread: false, trend: true }
+  regime: { news: false, highVol: false, wideSpread: false, trend: true },
+  reasons: []
 })
 
 export const setFlags = (p: Partial<Pick<StrategyState,'smcEnabled'|'showFVG'|'showZones'|'showLiquidity'|'rtl'>>) =>

@@ -12,7 +12,7 @@ export function StrategyHUD() {
   return (
     <div dir={dir} className="p-3 rounded border" style={{borderColor:'#e5e7eb'}}>
       <div className="font-semibold mb-2">Strategy HUD</div>
-      <div className="grid" style={{gridTemplateColumns:'repeat(3, minmax(0,1fr))', gap:12}}>
+      <div className="grid" style={{gridTemplateColumns:'repeat(4, minmax(0,1fr))', gap:12}}>
         <div>
           <div className="text-xs text-gray-500 mb-1">Scores</div>
           <div>Entry: {s.scores.entry.toFixed(2)}</div>
@@ -33,6 +33,16 @@ export function StrategyHUD() {
           <div>ATR%: {(s.risk.atr_pct*100).toFixed(2)}%</div>
           <div>Size: {(s.risk.size*100).toFixed(1)}%</div>
           <div>Circuit: {s.risk.circuit ? 'TRIPPED':'OK'}</div>
+        </div>
+        <div>
+          <div className="text-xs text-gray-500 mb-1">Reasons</div>
+          {s.reasons.length ? (
+            <ul className="list-disc ms-4 text-xs">
+              {s.reasons.slice(0, 5).map((r, i) => <li key={i}>{r}</li>)}
+            </ul>
+          ) : (
+            <div className="text-xs text-gray-400">None</div>
+          )}
         </div>
       </div>
     </div>

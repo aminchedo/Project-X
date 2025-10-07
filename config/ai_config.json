@@ -3,16 +3,74 @@
     "RSI": 0.15,
     "MACD": 0.15,
     "SMC_ZQS": 0.25,
-    "LIQ_GRAB": 0.1,
-    "FVG_ATR": 0.1,
+    "LIQ_GRAB": 0.10,
+    "FVG_ATR": 0.10,
     "Sentiment": 0.15,
-    "SAR": 0.1
+    "SAR": 0.10
   },
   "thresholds": {
-    "EntryScore": 0.65,
-    "ConfluenceScore": 0.55,
-    "ZQS_min": 0.55,
-    "FVG_min_atr": 0.15
+    "EntryScore": 0.67,
+    "ConfluenceScore": 0.57,
+    "ZQS_min": 0.60,
+    "FVG_min_atr": 0.18
+  },
+  "flags": {
+    "smc_enabled": true,
+    "require_bos2_on_countertrend": true
+  },
+  "regime_multipliers": {
+    "news_window": {
+      "SMC_ZQS": 0.65,
+      "LIQ_GRAB": 1.25,
+      "Sentiment": 1.25
+    },
+    "high_vol": {
+      "SMC_ZQS": 0.85,
+      "FVG_ATR": 1.15
+    },
+    "wide_spread": {
+      "SMC_ZQS": 0.80
+    },
+    "trend": {
+      "SMC_ZQS": 1.10,
+      "RSI": 1.05,
+      "MACD": 1.05
+    },
+    "range": {
+      "SMC_ZQS": 1.05,
+      "LIQ_GRAB": 1.10
+    }
+  },
+  "online_adaptation": {
+    "alpha": 0.2,
+    "clip_min": 0.5,
+    "clip_max": 1.5,
+    "decay": 0.94,
+    "per_signal": {}
+  },
+  "session": {
+    "timezone": "Europe/London",
+    "windows": [
+      {
+        "start": "07:00",
+        "end": "11:30"
+      },
+      {
+        "start": "13:30",
+        "end": "16:30"
+      }
+    ],
+    "strict": true,
+    "scale_outside": 0.3
+  },
+  "symbol_filters": {
+    "max_spread_bp": 20,
+    "whitelist": [],
+    "min_liquidity_score": 0
+  },
+  "entry_rules": {
+    "eq_min_zone_atr": 0.25,
+    "use_spread_offset": true
   },
   "risk": {
     "max_risk_per_trade": 0.02,
@@ -24,42 +82,9 @@
   },
   "smc": {
     "enabled": true,
-    "zqs_min": 0.55,
-    "fvg_min_atr": 0.15,
+    "zqs_min": 0.60,
+    "fvg_min_atr": 0.18,
     "htf_timeframe": "15m",
     "ltf_timeframe": "1m"
-  },
-  "regime_multipliers": {
-    "news_window": {
-      "SMC_ZQS": 0.7,
-      "LIQ_GRAB": 1.15,
-      "Sentiment": 1.2
-    },
-    "high_vol": {
-      "SMC_ZQS": 0.85,
-      "FVG_ATR": 1.1
-    },
-    "wide_spread": {
-      "SMC_ZQS": 0.8
-    },
-    "trend": {
-      "SMC_ZQS": 1.1,
-      "RSI": 1.05,
-      "MACD": 1.05
-    },
-    "range": {
-      "SMC_ZQS": 1.05,
-      "LIQ_GRAB": 1.1
-    }
-  },
-  "online_adaptation": {
-    "alpha": 0.2,
-    "clip_min": 0.5,
-    "clip_max": 1.5,
-    "decay": 0.94,
-    "per_signal": {
-      "SMC_ZQS": 1.0484802254403522,
-      "LIQ_GRAB": 1.0036
-    }
   }
 }
