@@ -1,4 +1,8 @@
 {
+  "neural_head": {
+    "enabled": false,
+    "bias_clip": 0.1
+  },
   "weights": {
     "RSI": 0.15,
     "MACD": 0.15,

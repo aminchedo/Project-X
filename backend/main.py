@@ -2678,6 +2678,16 @@ async def test_websocket():
 # Include enhanced API routes (Phases 7, 8, 9)
 app.include_router(enhanced_router)
 
+
+# Mount frontend static files (for production deployment, e.g., HF Spaces)
+# This serves the built frontend from the dist/ directory
+# Note: API routes take precedence, so this should be last
+from pathlib import Path
+dist_path = Path(__file__).parent.parent / "dist"
+if dist_path.exists():
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/", StaticFiles(directory=str(dist_path), html=True), name="static")
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
