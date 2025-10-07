@@ -90,8 +90,15 @@ class OnlineAdaptation(BaseModel):
     )
 
 
+class NeuralHeadConfig(BaseModel):
+    """Neural head feature flag configuration"""
+    enabled: bool = Field(default=False, description="Enable neural head scoring adjustment")
+    bias_clip: float = Field(default=0.1, ge=0.0, le=1.0, description="Maximum bias adjustment")
+
+
 class TradingConfig(BaseModel):
     """Complete trading system configuration"""
+    neural_head: NeuralHeadConfig = Field(default_factory=NeuralHeadConfig)
     weights: SignalWeights = Field(default_factory=SignalWeights)
     thresholds: Thresholds = Field(default_factory=Thresholds)
     risk: RiskPolicy = Field(default_factory=RiskPolicy)
@@ -148,14 +155,23 @@ def load_ai_config() -> Dict[str, Any]:
     """
     if not AI_CONFIG_PATH.exists():
         # Return default config as dict
-        return DEFAULT_CONFIG.model_dump()
+        cfg = DEFAULT_CONFIG.model_dump()
+    else:
+        try:
+            with open(AI_CONFIG_PATH, 'r') as f:
+                cfg = json.load(f)
+        except Exception as e:
+            # If loading fails, return default
+            cfg = DEFAULT_CONFIG.model_dump()
     
-    try:
-        with open(AI_CONFIG_PATH, 'r') as f:
-            return json.load(f)
-    except Exception as e:
-        # If loading fails, return default
-        return DEFAULT_CONFIG.model_dump()
+    # Ensure neural_head config exists with safe defaults
+    cfg.setdefault("neural_head", {"enabled": False, "bias_clip": 0.1})
+    
+    # Allow environment override for neural head
+    if os.getenv("NEURAL_HEAD_ENABLED") == "true":
+        cfg["neural_head"]["enabled"] = True
+    
+    return cfg
 
 
 def save_ai_config(config: Dict[str, Any]) -> None:
