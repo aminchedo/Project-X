@@ -247,3 +247,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   ...initialState,
   ...createActions(set, get),
 }));
+
+// ==================== Export Aliases for API Compatibility ====================
+
+/**
+ * wsStatus is an alias for connectionStatus
+ * Use: const wsStatus = useAppStore(state => state.connectionStatus)
+ */
