@@ -37,7 +37,7 @@ export function ScannerEntry() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div dir="rtl" className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="max-w-[1920px] mx-auto px-6 py-8">
         <header className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-white tracking-tight">

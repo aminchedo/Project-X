@@ -20,7 +20,7 @@ export const PortfolioEntry: React.FC = () => {
   } = useAppStore();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div dir="rtl" className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="max-w-7xl mx-auto px-6 lg:px-8 py-8 space-y-6">
         {/* Header */}
         <h1 className="text-3xl font-bold text-white">مدیریت پورتفولیو</h1>
