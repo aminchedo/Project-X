@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Bar } from 'react-chartjs-2';
 import { api } from '../services/api';
-import { realtimeTradingWs } from '../services/websocket';
+import { realtimeWs } from '../services/websocket';
 import { AlertCircle, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -59,7 +59,7 @@ const MarketDepthChart: React.FC<MarketDepthChartProps> = ({
     const interval = setInterval(fetchMarketDepth, 5000);
     return () => {
       clearInterval(interval);
-      realtimeTradingWs.disconnect();
+      realtimeWs.disconnect();
     };
   }, [symbol]);
 
@@ -104,13 +104,13 @@ const MarketDepthChart: React.FC<MarketDepthChartProps> = ({
   };
 
   const connectWebSocket = () => {
-    realtimeTradingWs.connect();
+    realtimeWs.connect();
     
-    realtimeTradingWs.onStateChange((state) => {
+    realtimeWs.onStateChange((state) => {
       setIsConnected(state === 'connected');
     });
 
-    realtimeTradingWs.onMessage((event) => {
+    realtimeWs.onMessage((event) => {
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'orderbook' && message.symbol === symbol) {
