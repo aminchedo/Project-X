@@ -307,3 +307,41 @@ If manual testing reveals issues:
 **Approval Status:** ✅ ARCHITECTURALLY APPROVED  
 
 **Next Step:** Execute manual runtime test and report results.
+
+---
+
+## Known Unknowns - Official Review Blockers
+
+The following uncertainties require human smoke test validation and cannot be verified through static code analysis:
+
+### WebSocket Connection Lifecycle During Navigation
+**Uncertainty:** Cannot confirm whether the WebSocket connection actually stays open during route changes or if it reconnects.
+**Why it matters:** If the connection drops and reconnects on navigation, traders would lose real-time data continuity and see connection status flicker.
+**Manual test needed:** Yes - a human tester could navigate between routes while watching the WebSocket badge and browser network tab.
+
+### Header Component Remounting Behavior  
+**Uncertainty:** Cannot verify whether the AppLayout header actually persists without remounting during navigation.
+**Why it matters:** If the header remounts, traders would see flicker and lose visual continuity of their trading context.
+**Manual test needed:** Yes - a human tester could watch for visual flicker and use React DevTools to monitor component mounting.
+
+### RTL Rendering in Actual Browser
+**Uncertainty:** Can see `dir="rtl"` attributes in code but cannot verify how Persian text actually renders.
+**Why it matters:** If RTL doesn't work properly, the interface would be unusable for Persian-speaking traders.
+**Manual test needed:** Yes - a human tester could open the app in a browser and verify Persian text flows right-to-left correctly.
+
+### Bolt Component Data Integration
+**Uncertainty:** Cannot determine whether Bolt components (TrainingDashboard, BacktestingModule, SettingsPanel) are wired to real data or just UI mockups.
+**Why it matters:** If these are just UI shells, the advanced features would be non-functional, making the product feel incomplete.
+**Manual test needed:** Yes - a human tester could interact with these components to see if they perform real operations.
+
+### Feature Flag Runtime Behavior
+**Uncertainty:** Cannot verify whether feature flags actually prevent access to disabled features at runtime.
+**Why it matters:** If feature gates don't work properly, users might access incomplete or dangerous features.
+**Manual test needed:** Yes - a human tester could toggle feature flags and verify that pages become accessible/inaccessible accordingly.
+
+### Console Errors During Navigation
+**Uncertainty:** Cannot detect runtime JavaScript errors that might occur during actual navigation.
+**Why it matters:** Console errors could indicate provider context issues, state synchronization problems, or other runtime failures.
+**Manual test needed:** Yes - a human tester could monitor the browser console while navigating and report any errors.
+
+**These are now official review blockers that require the human smoke test to resolve before merge approval.**
