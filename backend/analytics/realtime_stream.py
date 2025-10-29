@@ -228,7 +228,7 @@ class RealTimeStreamManager:
             try:
                 # Process data from all sources
                 await self._process_binance_data()
-                # await self._process_mock_data()  # DISABLED: No mock data allowed
+                # Mock data streaming completely disabled to enforce 100% real-data policy
                 
                 # Small delay to prevent overwhelming
                 await asyncio.sleep(0.01)  # 100Hz update rate
