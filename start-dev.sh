@@ -111,7 +111,7 @@ start_backend() {
     source venv/bin/activate
     
     # Start backend in background
-    python main.py > ../backend.log 2>&1 &
+    python3 main.py > ../backend.log 2>&1 &
     BACKEND_PID=$!
     
     cd ..
