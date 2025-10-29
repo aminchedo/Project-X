@@ -64,31 +64,12 @@ const PortfolioPanel: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      if (api && api.trading && api.trading.getPortfolioSummary) {
-        const response = await api.trading.getPortfolioSummary();
-        setSummary(response);
-      } else {
-        // Use mock data if API is not available
-        console.warn('API not available, using mock portfolio data');
-        setSummary({
-          total_value: 125750.50,
-          total_pnl: 2890.50,
-          pnl_percentage: 2.31,
-          total_positions: 5,
-          active_positions: 3,
-          closed_positions: 2,
-          win_rate: 68.9,
-          total_trades: 15,
-          daily_pnl: 125.75,
-          weekly_pnl: 890.25,
-          monthly_pnl: 2890.50,
-          positions: [],
-          allocation: {}
-        });
-      }
+      const response = await api.trading.getPortfolioSummary();
+      setSummary(response);
       setLastUpdate(new Date());
     } catch (err) {
       setError('Failed to load portfolio data');
+      setSummary(null);
       console.error('Portfolio fetch error:', err);
     } finally {
       setLoading(false);
