@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Wifi, WifiOff, Activity, Database, Brain, Shield } from 'lucide-react';
 import { api } from '../services/api';
-import { realtimeWs } from '../services/websocket';
+import { realtimeTradingWs } from '../services/websocket';
 
 interface IntegrationStatusProps {
   isBackendConnected: boolean;
@@ -72,7 +72,7 @@ const IntegrationStatus: React.FC<IntegrationStatusProps> = ({ isBackendConnecte
     }
 
     // Check WebSocket
-    const wsState = realtimeWs.getState();
+    const wsState = realtimeTradingWs.getState();
     updatedServices[1] = {
       ...updatedServices[1],
       status: wsState === 'connected' ? 'connected' : 'disconnected',

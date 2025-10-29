@@ -63,56 +63,73 @@ export const LazyRealTimeSignalPositions = () => (
 );
 
 export const LazyMarketVisualization3D = ({ 
-  marketData, 
-  selectedSymbol, 
-  onSymbolSelect 
+  symbols 
 }: {
-  marketData: any[];
-  selectedSymbol: string;
-  onSymbolSelect: (symbol: string) => void;
+  symbols?: string[];
 }) => (
   <LazyComponentWrapper fallbackTitle="3D Market Visualization">
-    <MarketVisualization3D 
-      marketData={marketData}
-      selectedSymbol={selectedSymbol}
-      onSymbolSelect={onSymbolSelect}
-    />
+    <MarketVisualization3D symbols={symbols} />
   </LazyComponentWrapper>
 );
 
 export const LazyMarketDepthChart = ({ 
-  data, 
-  maxLevels 
+  symbol, 
+  depth 
 }: {
-  data: any;
-  maxLevels: number;
+  symbol?: string;
+  depth?: number;
 }) => (
   <LazyComponentWrapper fallbackTitle="Market Depth">
-    <MarketDepthChart data={data} maxLevels={maxLevels} />
+    <MarketDepthChart symbol={symbol} depth={depth} />
   </LazyComponentWrapper>
 );
 
 export const LazyTradingChart = ({ 
-  data, 
-  symbol 
+  symbol,
+  timeframe,
+  height,
+  showVolume,
+  showIndicators,
+  onCrosshairMove
 }: {
-  data: any[];
-  symbol: string;
+  symbol?: string;
+  timeframe?: '1m' | '5m' | '15m' | '1h' | '4h' | '1d';
+  height?: number;
+  showVolume?: boolean;
+  showIndicators?: boolean;
+  onCrosshairMove?: (price: number, time: number) => void;
 }) => (
   <LazyComponentWrapper fallbackTitle="Trading Chart">
-    <TradingChart data={data} symbol={symbol} />
+    <TradingChart 
+      symbol={symbol}
+      timeframe={timeframe}
+      height={height}
+      showVolume={showVolume}
+      showIndicators={showIndicators}
+      onCrosshairMove={onCrosshairMove}
+    />
   </LazyComponentWrapper>
 );
 
 export const LazyChart = ({ 
   data, 
-  symbol 
+  type 
 }: {
-  data: any[];
-  symbol: string;
+  data: {
+    labels: string[];
+    datasets: Array<{
+      label: string;
+      data: number[];
+      borderColor?: string;
+      backgroundColor?: string | string[];
+      fill?: boolean;
+      tension?: number;
+    }>;
+  };
+  type?: 'line' | 'bar' | 'pie';
 }) => (
   <LazyComponentWrapper fallbackTitle="Advanced Chart">
-    <Chart data={data} symbol={symbol} />
+    <Chart data={data} type={type} />
   </LazyComponentWrapper>
 );
 

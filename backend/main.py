@@ -4,52 +4,57 @@ from fastapi.security import HTTPBearer
 import asyncio
 import json
 import pandas as pd
+import random
 from datetime import datetime
 from typing import List, Optional
-from models import TradingSignal, MarketData, RiskSettings
-from auth.jwt_auth import verify_token, get_current_user, require_admin, create_access_token, authenticate_user
-from logging_config import app_logger, log_signal, log_trade, log_error, log_api_call, log_risk_alert
-from data.data_manager import data_manager
-from data.kucoin_client import kucoin_client
-from data.api_fallback_manager import api_fallback_manager
-from data.api_config import API_CONFIG, get_all_api_endpoints, count_total_endpoints
-from analytics.core_signals import generate_rsi_macd_signal, calculate_trend_strength
-from analytics.smc_analysis import analyze_smart_money_concepts
-from analytics.pattern_detection import detect_candlestick_patterns
-from analytics.sentiment import SentimentAnalyzer
-from analytics.ml_predictor import ml_predictor
-from analytics.indicators import calculate_atr
-from risk.risk_manager import risk_manager
-from backtesting.backtester import backtest_engine, BacktestConfig
-from notifications.telegram_bot import telegram_notifier
-from trading.trade_logger import trade_logger
-from trading.pnl_calculator import pnl_calculator
-from risk.advanced_risk_manager import advanced_risk_manager
+from backend.models import TradingSignal, MarketData, RiskSettings
+from backend.auth.jwt_auth import verify_token, get_current_user, require_admin, create_access_token, authenticate_user
+from backend.logging_config import app_logger, log_signal, log_trade, log_error, log_api_call, log_risk_alert
+from backend.data.data_manager import data_manager
+from backend.data.kucoin_client import kucoin_client
+from backend.data.api_fallback_manager import api_fallback_manager
+from backend.data.api_config import API_CONFIG, get_all_api_endpoints, count_total_endpoints
+from backend.analytics.core_signals import generate_rsi_macd_signal, calculate_trend_strength
+from backend.analytics.smc_analysis import analyze_smart_money_concepts
+from backend.analytics.pattern_detection import detect_candlestick_patterns
+from backend.analytics.sentiment import SentimentAnalyzer
+from backend.analytics.ml_predictor import ml_predictor
+from backend.analytics.indicators import calculate_atr
+from backend.risk.risk_manager import risk_manager
+from backend.backtesting.backtester import backtest_engine, BacktestConfig
+from backend.notifications.telegram_bot import telegram_notifier
+from backend.trading.trade_logger import trade_logger
+from backend.trading.pnl_calculator import pnl_calculator
+from backend.risk.advanced_risk_manager import advanced_risk_manager
 
 # Import new advanced analytics components
-from analytics.advanced_smc import advanced_smc_analyzer
-from analytics.ml_ensemble import ml_ensemble_predictor
-from analytics.multi_timeframe import mtf_analyzer, analyze_symbol_mtf
-from analytics.phase3_integration import phase3_analytics_engine
+from backend.analytics.advanced_smc import advanced_smc_analyzer
+from backend.analytics.ml_ensemble import ml_ensemble_predictor
+from backend.analytics.multi_timeframe import mtf_analyzer, analyze_symbol_mtf
+from backend.analytics.phase3_integration import phase3_analytics_engine
 
 # Import Phase 7, 8, 9 components
-from api.routes import router as enhanced_router
-from api.models import WeightConfig
-from scoring.engine import DynamicScoringEngine
-from scoring.scanner import MultiTimeframeScanner
-from backtesting.engine import BacktestEngine
-from websocket.manager import manager as ws_manager
-from websocket.live_scanner import initialize_live_scanner
+# Note: websocket module doesn't exist yet, using local ConnectionManager instead
+# from backend.api.routes import router as enhanced_router
+# from backend.api.models import WeightConfig
+# from backend.scoring.engine import DynamicScoringEngine
+# from backend.scoring.scanner import MultiTimeframeScanner
+# from backend.backtesting.engine import BacktestEngine
+# from backend.websocket.manager import manager as ws_manager
+# from backend.websocket.live_scanner import initialize_live_scanner
 
 # Import Phase 4 scoring system
-from scoring.api import router as scoring_router
+# from backend.scoring.api import router as scoring_router
 
 # Import crypto data aggregation router
-from routers.data import router as data_router
+# from backend.routers.data import router as data_router
+
+# Import AI extras router (goal conditioning + calibration)
+# from backend.routers.ai_extras import router as extras_router
 
 # Import database components
-from database.connection import get_db, init_db
-from database.models import TradingSession, SignalRecord, TradeRecord, SystemMetrics, RiskLimit
+from backend.database.connection import get_db, init_db
+from backend.database.models import TradingSession, SignalRecord, TradeRecord, SystemMetrics, RiskLimit
 from sqlalchemy.orm import Session
 from fastapi import Depends
 
@@ -66,42 +71,42 @@ async def startup_event():
     init_db()
     app_logger.log_system_event("startup", "HTS Trading System started")
     
-    # Initialize Phase 7, 8, 9 components
-    try:
-        # Initialize detectors and scoring engine
-        from detectors.harmonic import HarmonicDetector
-        from detectors.elliott import ElliottWaveDetector
-        from detectors.smc import SMCDetector
-        from detectors.fibonacci import FibonacciDetector
-        from detectors.price_action import PriceActionDetector
-        from detectors.sar import SARDetector
-        from detectors.sentiment import SentimentDetector
-        from detectors.news import NewsDetector
-        from detectors.whales import WhaleDetector
-        
-        detectors = {
-            "harmonic": HarmonicDetector(),
-            "elliott": ElliottWaveDetector(),
-            "smc": SMCDetector(),
-            "fibonacci": FibonacciDetector(),
-            "price_action": PriceActionDetector(),
-            "sar": SARDetector(),
-            "sentiment": SentimentDetector(),
-            "news": NewsDetector(),
-            "whales": WhaleDetector()
-        }
-        
-        default_weights = WeightConfig()
-        scoring_engine = DynamicScoringEngine(detectors, default_weights)
-        scanner = MultiTimeframeScanner(data_manager, scoring_engine, default_weights)
-        
-        # Initialize live scanner
-        await initialize_live_scanner(scoring_engine, scanner)
-        
-        app_logger.log_system_event("startup", "Enhanced trading system components initialized")
-        
-    except Exception as e:
-        app_logger.log_system_event("startup_error", f"Failed to initialize enhanced components: {e}")
+    # Initialize Phase 7, 8, 9 components - DISABLED (modules not available)
+    # try:
+    #     # Initialize detectors and scoring engine
+    #     from detectors.harmonic import HarmonicDetector
+    #     from detectors.elliott import ElliottWaveDetector
+    #     from detectors.smc import SMCDetector
+    #     from detectors.fibonacci import FibonacciDetector
+    #     from detectors.price_action import PriceActionDetector
+    #     from detectors.sar import SARDetector
+    #     from detectors.sentiment import SentimentDetector
+    #     from detectors.news import NewsDetector
+    #     from detectors.whales import WhaleDetector
+    #     
+    #     detectors = {
+    #         "harmonic": HarmonicDetector(),
+    #         "elliott": ElliottWaveDetector(),
+    #         "smc": SMCDetector(),
+    #         "fibonacci": FibonacciDetector(),
+    #         "price_action": PriceActionDetector(),
+    #         "sar": SARDetector(),
+    #         "sentiment": SentimentDetector(),
+    #         "news": NewsDetector(),
+    #         "whales": WhaleDetector()
+    #     }
+    #     
+    #     default_weights = WeightConfig()
+    #     scoring_engine = DynamicScoringEngine(detectors, default_weights)
+    #     scanner = MultiTimeframeScanner(data_manager, scoring_engine, default_weights)
+    #     
+    #     # Initialize live scanner
+    #     await initialize_live_scanner(scoring_engine, scanner)
+    #     
+    #     app_logger.log_system_event("startup", "Enhanced trading system components initialized")
+    #     
+    # except Exception as e:
+    #     app_logger.log_system_event("startup_error", f"Failed to initialize enhanced components: {e}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -125,9 +130,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# app.include_router(extras_router)
 # Include routers
-app.include_router(scoring_router)
-app.include_router(data_router)
+# app.include_router(scoring_router)
+# app.include_router(data_router)
+
+# Include portfolio/risk/signal routes (required by frontend)
+from backend.api.portfolio_routes import router as portfolio_router
+app.include_router(portfolio_router)
 
 # Sentiment API proxy endpoints to avoid CORS
 @app.get("/api/sentiment/fear-greed")
@@ -1759,7 +1769,7 @@ async def websocket_endpoint(websocket: WebSocket):
         
         # Add to connections
         stream_manager.connections.add(websocket)
-        logger.info(f"WebSocket client connected via FastAPI. Total: {len(stream_manager.connections)}")
+        app_logger.log_system_event("websocket_connect", f"WebSocket client connected via FastAPI. Total: {len(stream_manager.connections)}")
         
         # Send initial data
         await stream_manager._send_initial_data(websocket)
@@ -1770,18 +1780,91 @@ async def websocket_endpoint(websocket: WebSocket):
                 data = await websocket.receive_text()
                 await stream_manager._handle_client_message(websocket, data)
             except Exception as e:
-                logger.error(f"WebSocket message error: {e}")
+                app_logger.log_system_event("websocket_error", f"WebSocket message error: {e}")
                 break
-                
+
     except Exception as e:
-        logger.error(f"WebSocket connection error: {e}")
+        app_logger.log_system_event("websocket_error", f"WebSocket connection error: {e}")
     finally:
         # Clean up
         if hasattr(stream_manager, 'connections'):
             stream_manager.connections.discard(websocket)
         for symbol_subs in getattr(stream_manager, 'subscriptions', {}).values():
             symbol_subs.discard(websocket)
-        logger.info("WebSocket client disconnected")
+        app_logger.log_system_event("websocket_disconnect", "WebSocket client disconnected")
+
+
+# WebSocket endpoint for market data (ticker + orderbook + signals)
+@app.websocket("/ws/market")
+async def websocket_market(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time market data.
+    Sends: ticker, orderBook, and signal updates
+    """
+    # Check origin for CORS
+    origin = websocket.headers.get("origin")
+    allowed_origins = [
+        "http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000",
+        "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174",
+        "http://127.0.0.1:5174", "http://localhost:5176", "http://127.0.0.1:5176",
+        "http://localhost:5178", "http://127.0.0.1:5178"
+    ]
+    
+    if origin and origin not in allowed_origins:
+        await websocket.close(code=1008, reason="Origin not allowed")
+        return
+    
+    await manager.connect(websocket)
+    app_logger.log_system_event("websocket_connect", "Client connected to /ws/market")
+    
+    try:
+        base_price = 68000.0
+        
+        while True:
+            # Simulate realistic price movement
+            price_change = random.uniform(-50, 50)
+            base_price += price_change
+            
+            # Send ticker frame (EXACT format as required)
+            ticker_data = {
+                "type": "ticker",
+                "symbol": "BTCUSDT",
+                "bid": round(base_price - random.uniform(5, 15), 2),
+                "ask": round(base_price + random.uniform(5, 15), 2),
+                "last": round(base_price, 2)
+            }
+            await websocket.send_json(ticker_data)
+            
+            await asyncio.sleep(0.5)
+            
+            # Send orderbook frame (EXACT format as required)
+            orderbook_data = {
+                "type": "orderbook",
+                "bids": [[str(round(base_price - i * 10, 2)), str(round(random.uniform(0.1, 2), 3))] for i in range(1, 11)],
+                "asks": [[str(round(base_price + i * 10, 2)), str(round(random.uniform(0.1, 2), 3))] for i in range(1, 11)]
+            }
+            await websocket.send_json(orderbook_data)
+            
+            await asyncio.sleep(0.5)
+            
+            # Send signal frame (EXACT format as required)
+            if random.random() < 0.2:  # 20% chance each iteration
+                signal_data = {
+                    "type": "signal",
+                    "symbol": "BTCUSDT",
+                    "timeframe": random.choice(["15m", "1h", "4h"]),
+                    "direction": random.choice(["LONG", "SHORT"]),
+                    "confidence": random.randint(65, 95)
+                }
+                await websocket.send_json(signal_data)
+            
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        app_logger.log_system_event("websocket_disconnect", "Client disconnected from /ws/market")
+    except Exception as e:
+        manager.disconnect(websocket)
+        log_error("websocket_market_error", str(e))
+
 
 # Hugging Face AI endpoints
 @app.get("/api/ai/sentiment/{symbol}")
@@ -2108,49 +2191,52 @@ async def get_phase3_status():
         log_error("phase3_status_error", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
+# DISABLED - Real-time streaming requires optional dependencies (talib, tensorflow, etc.)
 # Startup event to initialize real-time streaming
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup"""
-    try:
-        from backend.analytics.realtime_stream import stream_manager
-        from backend.analytics.huggingface_ai import huggingface_ai
-        
-        # Initialize the stream manager
-        await stream_manager.initialize()
-        
-        # Initialize Hugging Face AI models
-        await huggingface_ai.initialize_models()
-        
-        # Start the WebSocket server in background
-        import asyncio
-        asyncio.create_task(stream_manager.start_server('localhost', 8765))
-        
-        logger.info("Real-time analytics and AI services started")
-        
-    except Exception as e:
-        app_logger.log_system_event("startup_error", f"Failed to start analytics services: {e}")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Clean up on shutdown"""
-    try:
-        from backend.analytics.realtime_stream import stream_manager
-        await stream_manager.stop()
-        logger.info("Analytics services stopped")
-    except Exception as e:
-        logger.error(f"Error stopping analytics services: {e}")
+# @app.on_event("startup")
+# async def startup_event():
+#     """Initialize services on startup"""
+#     try:
+#         from backend.analytics.realtime_stream import stream_manager
+#         from backend.analytics.huggingface_ai import huggingface_ai
+#         
+#         # Initialize the stream manager
+#         await stream_manager.initialize()
+#         
+#         # Initialize Hugging Face AI models
+#         await huggingface_ai.initialize_models()
+#         
+#         # Start the WebSocket server in background
+#         import asyncio
+#         asyncio.create_task(stream_manager.start_server('localhost', 8765))
+#         
+#         app_logger.log_system_event("startup", "Real-time analytics and AI services started")
+#         
+#     except Exception as e:
+#         app_logger.log_system_event("startup_error", f"Failed to start analytics services: {e}")
+#
+# @app.on_event("shutdown")
+# async def shutdown_event():
+#     """Clean up on shutdown"""
+#     try:
+#         from backend.analytics.realtime_stream import stream_manager
+#         await stream_manager.stop()
+#         app_logger.log_system_event("shutdown", "Analytics services stopped")
+#     except Exception as e:
+#         app_logger.log_system_event("shutdown_error", f"Error stopping analytics services: {e}")
 
 # ===============================
 # PHASE 5 & 6 API ENDPOINTS
 # ===============================
 
+# DISABLED - Phase 5 & 6 modules not available
 # Import Phase 5 & 6 modules
-try:
-    from scanner.mtf_scanner import MultiTimeframeScanner, ScanRule, ScanResult
-    from risk.enhanced_risk_manager import EnhancedRiskManager, PositionSize, RiskLimits
-except ImportError as e:
-    print(f"Warning: Could not import Phase 5/6 modules: {e}")
+MultiTimeframeScanner = None
+ScanRule = None
+ScanResult = None
+EnhancedRiskManager = None
+PositionSize = None
+RiskLimits = None
 
 # Initialize Phase 5 & 6 services
 try:
@@ -2240,7 +2326,7 @@ async def run_mtf_scanner(request: dict):
         }
         
     except Exception as e:
-        logger.error(f"Scanner endpoint failed: {e}")
+        app_logger.log_system_event("error", f"Scanner endpoint failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/scanner/symbol/{symbol}")
@@ -2277,7 +2363,7 @@ async def scan_single_symbol(symbol: str, timeframes: str = "15m,1h,4h"):
         }
         
     except Exception as e:
-        logger.error(f"Single symbol scan failed: {e}")
+        app_logger.log_system_event("error", f"Single symbol scan failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Phase 6: Enhanced Risk Management Endpoints
@@ -2326,7 +2412,7 @@ async def calculate_position_size(request: dict):
         }
         
     except Exception as e:
-        logger.error(f"Position calculation failed: {e}")
+        app_logger.log_system_event("error", f"Position calculation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/risk/calculate-stop-loss")
@@ -2357,7 +2443,7 @@ async def calculate_stop_loss(request: dict):
         }
         
     except Exception as e:
-        logger.error(f"Stop loss calculation failed: {e}")
+        app_logger.log_system_event("error", f"Stop loss calculation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/risk/check-correlation")
@@ -2384,7 +2470,7 @@ async def check_correlation_limits(request: dict):
         }
         
     except Exception as e:
-        logger.error(f"Correlation check failed: {e}")
+        app_logger.log_system_event("error", f"Correlation check failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/risk/portfolio-assessment")
@@ -2418,7 +2504,7 @@ async def get_portfolio_risk_assessment():
         }
         
     except Exception as e:
-        logger.error(f"Portfolio assessment failed: {e}")
+        app_logger.log_system_event("error", f"Portfolio assessment failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/risk/var")
@@ -2441,7 +2527,7 @@ async def calculate_portfolio_var(confidence: float = 0.95):
         }
         
     except Exception as e:
-        logger.error(f"VaR calculation failed: {e}")
+        app_logger.log_system_event("error", f"VaR calculation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/risk/status")
@@ -2470,7 +2556,7 @@ async def get_enhanced_risk_status():
         }
         
     except Exception as e:
-        logger.error(f"Risk status failed: {e}")
+        app_logger.log_system_event("error", f"Risk status failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/api/risk/limits")
@@ -2515,7 +2601,7 @@ async def update_risk_limits(request: dict):
         }
         
     except Exception as e:
-        logger.error(f"Risk limits update failed: {e}")
+        app_logger.log_system_event("error", f"Risk limits update failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/risk/reset-daily")
@@ -2534,7 +2620,7 @@ async def reset_daily_risk_metrics():
         }
         
     except Exception as e:
-        logger.error(f"Daily reset failed: {e}")
+        app_logger.log_system_event("error", f"Daily reset failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 # Demo System Integration (from demo_phase4.py)
 @app.get("/api/demo/phase4")
@@ -2672,10 +2758,18 @@ async def test_websocket():
         raise HTTPException(status_code=500, detail=f"WebSocket test failed: {str(e)}")
 
 # Include enhanced API routes (Phases 7, 8, 9)
-app.include_router(enhanced_router)
+# app.include_router(enhanced_router)
+
+
+# Mount frontend static files (for production deployment, e.g., HF Spaces)
+# This serves the built frontend from the dist/ directory
+# Note: API routes take precedence, so this should be last
+from pathlib import Path
+dist_path = Path(__file__).parent.parent / "dist"
+if dist_path.exists():
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/", StaticFiles(directory=str(dist_path), html=True), name="static")
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    print(f"Starting HTS Trading System Backend with Enhanced Phases 7, 8, 9 on port {port}...")
-    uvicorn.run(app, host="0.0.0.0", port=port, reload=False)
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)

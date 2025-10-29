@@ -1,96 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { Wifi, WifiOff } from 'lucide-react';
-import { connectWs } from '../services/websocket';
+import { useAppStore } from '../stores/useAppStore';
 
-type ConnectionStatus = 'connected' | 'disconnected' | 'reconnecting';
-
-interface WSBadgeProps {
-  endpoint?: string;
-  autoReconnect?: boolean;
-  reconnectDelay?: number;
-}
-
-export const WSBadge: React.FC<WSBadgeProps> = ({ 
-  endpoint = '/ws/realtime',
-  autoReconnect = true,
-  reconnectDelay = 2000
-}) => {
-  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    const connect = () => {
-      try {
-        // Clean up previous connection
-        if (wsRef.current) {
-          wsRef.current.close();
-        }
-
-        const ws = connectWs(
-          endpoint,
-          (event) => {
-            // Handle incoming messages
-            try {
-              const data = JSON.parse(event.data);
-              console.log('WS message:', data);
-            } catch (error) {
-              console.error('Failed to parse WS message:', error);
-            }
-          },
-          { autoReconnect: false } // We handle reconnection manually
-        );
-
-        ws.addEventListener('open', () => {
-          console.log('WebSocket connected');
-          setStatus('connected');
-          if (reconnectTimeoutRef.current) {
-            clearTimeout(reconnectTimeoutRef.current);
-            reconnectTimeoutRef.current = null;
-          }
-        });
-
-        ws.addEventListener('close', () => {
-          console.log('WebSocket disconnected');
-          setStatus('disconnected');
-          
-          if (autoReconnect) {
-            setStatus('reconnecting');
-            reconnectTimeoutRef.current = setTimeout(() => {
-              connect();
-            }, reconnectDelay);
-          }
-        });
-
-        ws.addEventListener('error', (error) => {
-          console.error('WebSocket error:', error);
-          setStatus('disconnected');
-        });
-
-        wsRef.current = ws;
-      } catch (error) {
-        console.error('Failed to connect WebSocket:', error);
-        setStatus('disconnected');
-        
-        if (autoReconnect) {
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connect();
-          }, reconnectDelay);
-        }
-      }
-    };
-
-    connect();
-
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-    };
-  }, [endpoint, autoReconnect, reconnectDelay]);
+export const WSBadge: React.FC = () => {
+  // Read connection status from ZUSTAND store (managed by LiveDataContext)
+  const { connectionStatus } = useAppStore();
 
   const statusConfig = {
     connected: {
@@ -107,21 +21,35 @@ export const WSBadge: React.FC<WSBadgeProps> = ({
       borderColor: 'border-red-500/30',
       icon: WifiOff
     },
-    reconnecting: {
+    connecting: {
       label: 'Connecting...',
       color: 'text-amber-400',
       bgColor: 'bg-amber-500/20',
       borderColor: 'border-amber-500/30',
       icon: Wifi
+    },
+    reconnecting: {
+      label: 'Reconnecting...',
+      color: 'text-amber-400',
+      bgColor: 'bg-amber-500/20',
+      borderColor: 'border-amber-500/30',
+      icon: Wifi
+    },
+    error: {
+      label: 'Error',
+      color: 'text-red-400',
+      bgColor: 'bg-red-500/20',
+      borderColor: 'border-red-500/30',
+      icon: WifiOff
     }
   };
 
-  const config = statusConfig[status];
+  const config = statusConfig[connectionStatus] || statusConfig.disconnected;
   const Icon = config.icon;
 
   return (
     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${config.bgColor} border ${config.borderColor}`}>
-      <Icon className={`w-4 h-4 ${config.color} ${status === 'reconnecting' ? 'animate-pulse' : ''}`} />
+      <Icon className={`w-4 h-4 ${config.color} ${connectionStatus === 'connecting' || connectionStatus === 'reconnecting' ? 'animate-pulse' : ''}`} />
       <span className={`text-xs font-medium ${config.color}`}>
         {config.label}
       </span>

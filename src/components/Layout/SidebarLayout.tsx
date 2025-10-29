@@ -1,124 +1,90 @@
-import React, { useState, useEffect } from 'react';
-import { ModernSidebar } from '../Navigation/ModernSidebar';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import ModernSidebar from './ModernSidebar';
+import Topbar from './Topbar';
 
 interface SidebarLayoutProps {
   children: React.ReactNode;
-  activeTab: string;
-  onTabChange: (tabId: string) => void;
-  user?: any;
-  onLogout?: () => void;
-  isBackendConnected?: boolean;
-  backendStatus?: any;
+  activePath?: string;
+  onNavigate?: (href: string) => void;
 }
 
-export const SidebarLayout: React.FC<SidebarLayoutProps> = ({
-  children,
-  activeTab,
-  onTabChange,
-  user,
-  onLogout,
-  isBackendConnected = false,
-  backendStatus
+const SidebarLayout: React.FC<SidebarLayoutProps> = ({ 
+  children, 
+  activePath = '/dashboard',
+  onNavigate 
 }) => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Auto-collapse sidebar based on viewport size
-  useEffect(() => {
-    const handleResize = () => {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      
-      // Auto-collapse when width < 1280px or height < 720px
-      if (width < 1280 || height < 720) {
-        setIsSidebarCollapsed(true);
-      }
-    };
-
-    // Check on mount
-    handleResize();
-
-    // Add resize listener with debounce
-    let timeoutId: NodeJS.Timeout;
-    const debouncedResize = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(handleResize, 150);
-    };
-
-    window.addEventListener('resize', debouncedResize);
-    return () => {
-      window.removeEventListener('resize', debouncedResize);
-      clearTimeout(timeoutId);
-    };
-  }, []);
-
-  const handleToggleSidebar = () => {
-    setIsSidebarCollapsed(!isSidebarCollapsed);
+  const handleNavigate = (href: string) => {
+    onNavigate?.(href);
+    setIsMobileMenuOpen(false);
   };
-
-  const handleMobileMenuToggle = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
-
-  // Calculate sidebar width in pixels (for proper spacing)
-  const sidebarWidth = isSidebarCollapsed ? 'clamp(64px, 7vw, 88px)' : 'clamp(240px, 18vw, 280px)';
 
   return (
-    <div className="flex h-screen w-screen bg-slate-950 text-white overflow-hidden fullscreen-container" dir="rtl">
-      {/* Mobile Overlay */}
-      {isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* Desktop Sidebar - Positioned on the right */}
-      <div 
-        className="hidden lg:block fixed top-0 right-0 h-full z-30 transition-all duration-300"
-        style={{ width: sidebarWidth }}
-      >
+    <div className="min-h-screen bg-slate-950 flex">
+      {/* Desktop Sidebar */}
+      <div className="hidden lg:block">
         <ModernSidebar
-          activeTab={activeTab}
-          onTabChange={onTabChange}
           isCollapsed={isSidebarCollapsed}
-          onToggleCollapse={handleToggleSidebar}
+          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          activePath={activePath}
+          onNavigate={handleNavigate}
         />
-      </div>
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full transition-all duration-300">
-        {/* Main Content with dynamic padding based on sidebar width */}
-        <main 
-          className="flex-1 overflow-hidden bg-slate-950 transition-all duration-300"
-          style={{ 
-            paddingRight: `calc(${sidebarWidth} + 8px)` // Add small gap
-          }}
-        >
-          <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
-            {children}
-          </div>
-        </main>
       </div>
 
       {/* Mobile Sidebar */}
-      <div 
-        className={`lg:hidden fixed top-0 right-0 h-full z-50 transition-transform duration-300 ${
-          isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
-        role="navigation"
-        aria-label="Mobile navigation"
-      >
-        <ModernSidebar
-          activeTab={activeTab}
-          onTabChange={(tabId) => {
-            onTabChange(tabId);
-            setIsMobileMenuOpen(false);
-          }}
-          isCollapsed={false}
-          onToggleCollapse={() => {}}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              className="lg:hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+            />
+
+            {/* Sidebar */}
+            <motion.div
+              className="lg:hidden fixed left-0 top-0 bottom-0 z-50"
+              initial={{ x: -280 }}
+              animate={{ x: 0 }}
+              exit={{ x: -280 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            >
+              <ModernSidebar
+                isCollapsed={false}
+                activePath={activePath}
+                onNavigate={handleNavigate}
+              />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Topbar */}
+        <Topbar
+          onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          isSidebarOpen={isMobileMenuOpen}
         />
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-auto">
+          <motion.div
+            className="p-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            {children}
+          </motion.div>
+        </main>
       </div>
     </div>
   );

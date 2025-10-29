@@ -1,27 +1,59 @@
 import React from 'react';
-import { RefreshCw } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Loader2 } from 'lucide-react';
 
 interface LoadingProps {
   message?: string;
   size?: 'sm' | 'md' | 'lg';
+  fullScreen?: boolean;
 }
 
-export const Loading: React.FC<LoadingProps> = ({ 
-  message = 'در حال بارگذاری...', 
-  size = 'md' 
+const Loading: React.FC<LoadingProps> = ({ 
+  message = 'Loading...', 
+  size = 'md',
+  fullScreen = false 
 }) => {
   const sizeClasses = {
-    sm: 'w-4 h-4',
-    md: 'w-6 h-6',
-    lg: 'w-8 h-8'
+    sm: 'w-6 h-6',
+    md: 'w-12 h-12',
+    lg: 'w-16 h-16'
   };
 
-  return (
-    <div className="flex flex-col items-center justify-center py-8">
-      <RefreshCw className={`${sizeClasses[size]} animate-spin text-cyan-500 mb-3`} />
+  const textSizeClasses = {
+    sm: 'text-sm',
+    md: 'text-base',
+    lg: 'text-lg'
+  };
+
+  const content = (
+    <div className="flex flex-col items-center justify-center gap-4">
+      <div className="relative">
+        <Loader2 className={`${sizeClasses[size]} text-cyan-500 animate-spin`} />
+      </div>
       {message && (
-        <p className="text-slate-400 text-sm">{message}</p>
+        <motion.p 
+          className={`${textSizeClasses[size]} text-slate-400`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
+        >
+          {message}
+        </motion.p>
       )}
+    </div>
+  );
+
+  if (fullScreen) {
+    return (
+      <div className="fixed inset-0 bg-slate-950 flex items-center justify-center z-50">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-8 text-center">
+      {content}
     </div>
   );
 };

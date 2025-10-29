@@ -1,0 +1,69 @@
+{
+  "neural_head": {
+    "enabled": false,
+    "bias_clip": 0.1
+  },
+  "weights": {
+    "RSI": 0.15,
+    "MACD": 0.15,
+    "SMC_ZQS": 0.25,
+    "LIQ_GRAB": 0.1,
+    "FVG_ATR": 0.1,
+    "Sentiment": 0.15,
+    "SAR": 0.1
+  },
+  "thresholds": {
+    "EntryScore": 0.65,
+    "ConfluenceScore": 0.55,
+    "ZQS_min": 0.55,
+    "FVG_min_atr": 0.15
+  },
+  "risk": {
+    "max_risk_per_trade": 0.02,
+    "max_position": 0.25,
+    "stop_loss_atr_multiple": 1.5,
+    "take_profit_rr": 2.0,
+    "countertrend_reduction": 0.5,
+    "news_impact_reduction": 0.5
+  },
+  "smc": {
+    "enabled": true,
+    "zqs_min": 0.55,
+    "fvg_min_atr": 0.15,
+    "htf_timeframe": "15m",
+    "ltf_timeframe": "1m"
+  },
+  "regime_multipliers": {
+    "news_window": {
+      "SMC_ZQS": 0.7,
+      "LIQ_GRAB": 1.15,
+      "Sentiment": 1.2
+    },
+    "high_vol": {
+      "SMC_ZQS": 0.85,
+      "FVG_ATR": 1.1
+    },
+    "wide_spread": {
+      "SMC_ZQS": 0.8
+    },
+    "trend": {
+      "SMC_ZQS": 1.1,
+      "RSI": 1.05,
+      "MACD": 1.05
+    },
+    "range": {
+      "SMC_ZQS": 1.05,
+      "LIQ_GRAB": 1.1
+    }
+  },
+  "online_adaptation": {
+    "alpha": 0.2,
+    "clip_min": 0.5,
+    "clip_max": 1.5,
+    "decay": 0.94,
+    "per_signal": {
+      "SMC_ZQS": 1.0484802254403522,
+      "LIQ_GRAB": 1.0036
+    }
+  }
+}

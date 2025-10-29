@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import SignalCard from './SignalCard';
 import TradingChart from './TradingChart';
 import RiskPanel from './RiskPanel';
@@ -12,45 +13,61 @@ import Scanner from '../pages/Scanner';
 import SignalDetails from './SignalDetails';
 import StrategyBuilder from './StrategyBuilder';
 import { ProfessionalLayout, ProfessionalCard } from './Layout/ProfessionalLayout';
-import { ProfessionalNavigation } from './Navigation/ProfessionalNavigation';
 import { ProfessionalMetricCard, ProfessionalProgressBar } from './DataVisualization/ProfessionalCharts';
 import { TradingSignal, MarketData, OHLCVData } from '../types';
 import { tradingEngine } from '../services/tradingEngine';
 import { binanceApi } from '../services/binanceApi';
-import { api } from '../services/api';
 import { Activity, RefreshCw, Zap, TrendingUp, PieChart, DollarSign, TestTube, MessageSquare, Brain, Search, Sliders } from 'lucide-react';
 import clsx from 'clsx';
 
+// NEW: Connect to Zustand store instead of legacy state
+import { useAppStore } from '../stores/useAppStore';
+import { useOverviewSync } from '../hooks/useOverviewSync';
+
 interface DashboardProps {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   user?: any;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onLogout?: () => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
+  // ZUSTAND: Get data from global store
+  useOverviewSync(true); // Start polling backend
+  
+  const {
+    currentSymbol,
+    timeframe,
+    connectionStatus,
+    ticker,
+    orderBook,
+    lastSignal,
+    pnlSummary,
+    portfolioSummary,
+    riskSnapshot,
+    setSymbol,
+  } = useAppStore();
+
+  // Local UI state (tabs, loading, etc.)
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [marketData, setMarketData] = useState<MarketData[]>([]);
   const [chartData, setChartData] = useState<OHLCVData[]>([]);
-  const [selectedSymbol, setSelectedSymbol] = useState<string>('BTCUSDT');
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<string>('scanner2'); // Use new comprehensive scanner by default
+  const [activeTab, setActiveTab] = useState<string>('scanner2');
   const [apiHealthData, setApiHealthData] = useState<any>(null);
   const [detailedAnalysis, setDetailedAnalysis] = useState<any>(null);
   const [selectedSymbolForDetails, setSelectedSymbolForDetails] = useState<string | null>(null);
 
   const symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'SOLUSDT', 'XRPUSDT'];
 
-  // Real-time updates using polling
+  // Real-time updates using polling (for legacy data not yet in store)
   useEffect(() => {
     loadInitialData();
     
     loadApiHealth();
     // Set up real-time price updates
-    const priceInterval = setInterval(updateMarketData, 3000); // Every 3 seconds
-    const signalInterval = setInterval(refreshSignals, 30000); // Every 30 seconds
-    const healthInterval = setInterval(checkSystemHealth, 15000); // Every 15 seconds
-    const apiHealthInterval = setInterval(loadApiHealth, 60000); // Check API health every minute
+    const priceInterval = setInterval(updateMarketData, 10000);
+    const signalInterval = setInterval(refreshSignals, 60000);
+    const healthInterval = setInterval(checkSystemHealth, 30000);
+    const apiHealthInterval = setInterval(loadApiHealth, 120000);
 
     return () => {
       clearInterval(priceInterval);
@@ -62,13 +79,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
   // Update chart when symbol changes
   useEffect(() => {
-    loadChartData(selectedSymbol);
-  }, [selectedSymbol]);
+    loadChartData(currentSymbol);
+  }, [currentSymbol]);
 
   const loadInitialData = async () => {
     await Promise.all([
       updateMarketData(),
-      loadChartData(selectedSymbol),
+      loadChartData(currentSymbol),
       checkSystemHealth()
     ]);
   };
@@ -123,8 +140,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
   const checkSystemHealth = async () => {
     try {
-      // Simple health check by testing API connectivity
-      await binanceApi.getTickerPrice('BTCUSDT');
+      await binanceApi.getCurrentPrice('BTCUSDT');
     } catch (error) {
       console.error('Health check failed:', error);
     }
@@ -132,12 +148,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
   const loadApiHealth = async () => {
     try {
-      const healthData = await api.get('/api/health/all-apis');
+      const healthData = await fetch('http://localhost:8000/health').then(r => r.json());
       setApiHealthData(healthData);
     } catch (error) {
       console.error('Failed to load API health:', error);
     }
   };
+
   const generateSignal = async (symbol: string) => {
     setIsLoading(true);
     try {
@@ -167,7 +184,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   };
 
   const handleAnalyze = async (symbol: string) => {
-    setSelectedSymbol(symbol);
+    setSymbol(symbol);
     await loadChartData(symbol);
     
     try {
@@ -196,10 +213,9 @@ Confidence: ${(signal.confidence * 100).toFixed(1)}%
     }
   };
 
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Header - RTL Aware */}
+      {/* Header */}
       <header className="bg-slate-900/80 backdrop-blur-xl border-b border-slate-700/50 sticky top-0 z-50 shadow-lg shadow-slate-900/20">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -214,14 +230,14 @@ Confidence: ${(signal.confidence * 100).toFixed(1)}%
                 </div>
               </div>
               
-              {/* WebSocket Status Badge */}
+              {/* WebSocket Status Badge - NOW FROM ZUSTAND */}
               <WSBadge />
             </div>
             
             <div className="flex items-center gap-4">
               <select
-                value={selectedSymbol}
-                onChange={(e) => setSelectedSymbol(e.target.value)}
+                value={currentSymbol}
+                onChange={(e) => setSymbol(e.target.value)}
                 className="bg-slate-700/50 border border-slate-600/50 rounded-lg px-4 py-2 text-white focus:border-cyan-500/50 focus:outline-none"
               >
                 {symbols.map(symbol => (
@@ -230,7 +246,7 @@ Confidence: ${(signal.confidence * 100).toFixed(1)}%
               </select>
               
               <button
-                onClick={() => generateSignal(selectedSymbol)}
+                onClick={() => generateSignal(currentSymbol)}
                 disabled={isLoading}
                 className={`flex items-center gap-2 px-6 py-2 rounded-lg font-medium transition-all duration-200 ${
                   isLoading 
@@ -295,11 +311,7 @@ Confidence: ${(signal.confidence * 100).toFixed(1)}%
           {/* Market Scanner Tab (Simple/Legacy) */}
           {activeTab === 'scanner' && !selectedSymbolForDetails && (
             <div className="col-span-12">
-              <MarketScanner 
-                onOpenDetails={(symbol) => {
-                  setSelectedSymbolForDetails(symbol);
-                }}
-              />
+              <MarketScanner />
             </div>
           )}
 
@@ -307,8 +319,9 @@ Confidence: ${(signal.confidence * 100).toFixed(1)}%
           {activeTab === 'scanner' && selectedSymbolForDetails && (
             <div className="col-span-12">
               <SignalDetails
-                symbol={selectedSymbolForDetails}
-                onBack={() => setSelectedSymbolForDetails(null)}
+                signal={null}
+                isOpen={true}
+                onClose={() => setSelectedSymbolForDetails(null)}
               />
             </div>
           )}
@@ -356,12 +369,10 @@ Confidence: ${(signal.confidence * 100).toFixed(1)}%
                 <div className="bg-gray-800/30 backdrop-blur-lg rounded-2xl p-6 border border-gray-700/50">
                   <h2 className="text-xl font-bold text-white mb-4 flex items-center">
                     <div className="w-2 h-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 animate-pulse mr-3"></div>
-                    Price Chart - {selectedSymbol}
+                    Price Chart - {currentSymbol}
                   </h2>
                   <TradingChart 
-                    symbol={selectedSymbol}
-                    data={chartData}
-                    indicators={detailedAnalysis?.analysis}
+                    symbol={currentSymbol}
                   />
                 </div>
               </div>
@@ -429,27 +440,20 @@ Confidence: ${(signal.confidence * 100).toFixed(1)}%
                     <div className="grid grid-cols-4 gap-4 mb-6">
                       <div className="bg-gray-700/30 rounded-lg p-4">
                         <div className="text-sm text-gray-400 mb-1">Total APIs</div>
-                        <div className="text-2xl font-bold text-white">{apiHealthData.total_apis}</div>
+                        <div className="text-2xl font-bold text-white">{apiHealthData.total_apis || 1}</div>
                       </div>
                       <div className="bg-gray-700/30 rounded-lg p-4">
-                        <div className="text-sm text-gray-400 mb-1">Healthy</div>
-                        <div className="text-2xl font-bold text-emerald-400">{apiHealthData.healthy_apis}</div>
+                        <div className="text-sm text-gray-400 mb-1">Status</div>
+                        <div className="text-2xl font-bold text-emerald-400">{apiHealthData.status}</div>
                       </div>
                       <div className="bg-gray-700/30 rounded-lg p-4">
-                        <div className="text-sm text-gray-400 mb-1">Unhealthy</div>
-                        <div className="text-2xl font-bold text-red-400">{apiHealthData.unhealthy_apis}</div>
+                        <div className="text-sm text-gray-400 mb-1">WS Connections</div>
+                        <div className="text-2xl font-bold text-cyan-400">{apiHealthData.websocket_connections || 0}</div>
                       </div>
                       <div className="bg-gray-700/30 rounded-lg p-4">
-                        <div className="text-sm text-gray-400 mb-1">Overall Health</div>
-                        <div className="text-2xl font-bold text-cyan-400">{apiHealthData.overall_health.toFixed(1)}%</div>
+                        <div className="text-sm text-gray-400 mb-1">Data Source</div>
+                        <div className="text-sm font-bold text-blue-400">{apiHealthData.data_source || 'N/A'}</div>
                       </div>
-                    </div>
-                    
-                    <div className="w-full bg-gray-700/50 rounded-full h-3">
-                      <div 
-                        className="bg-gradient-to-r from-emerald-500 to-green-400 h-3 rounded-full transition-all duration-500"
-                        style={{ width: `${apiHealthData.overall_health}%` }}
-                      />
                     </div>
                   </div>
                 ) : (
@@ -526,6 +530,8 @@ Confidence: ${(signal.confidence * 100).toFixed(1)}%
                             Telegram Chat ID
                           </label>
                           <input
+                            id="telegram-chat-id"
+                            name="telegram-chat-id"
                             type="text"
                             placeholder="Enter your chat ID"
                             className="w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
@@ -536,6 +542,8 @@ Confidence: ${(signal.confidence * 100).toFixed(1)}%
                             Min Confidence Threshold
                           </label>
                           <input
+                            id="confidence-threshold"
+                            name="confidence-threshold"
                             type="range"
                             min="0.5"
                             max="1"
@@ -600,94 +608,124 @@ Confidence: ${(signal.confidence * 100).toFixed(1)}%
           )}
         </div>
 
-        {/* Market Overview Table */}
+        {/* Market Overview Table - ZUSTAND DATA */}
         {activeTab === 'signals' && (
           <div className="mt-6">
             <div className="bg-gray-800/30 backdrop-blur-lg rounded-2xl p-6 border border-gray-700/50">
               <h2 className="text-xl font-bold text-white mb-4 flex items-center">
                 <div className="w-2 h-2 rounded-full bg-gradient-to-r from-yellow-500 to-orange-400 animate-pulse mr-3"></div>
-                Market Overview (KuCoin Data)
+                Market Overview (Live Data from Backend)
               </h2>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="bg-slate-800/30">
                       <th className="text-left py-4 px-6 text-slate-400 font-medium">Symbol</th>
-                      <th className="text-right py-4 px-6 text-slate-400 font-medium">Price</th>
-                      <th className="text-right py-4 px-6 text-slate-400 font-medium">24h Change</th>
-                      <th className="text-right py-4 px-6 text-slate-400 font-medium">Volume (24h)</th>
+                      <th className="text-right py-4 px-6 text-slate-400 font-medium">Bid</th>
+                      <th className="text-right py-4 px-6 text-slate-400 font-medium">Ask</th>
+                      <th className="text-right py-4 px-6 text-slate-400 font-medium">Last</th>
                       <th className="text-center py-4 px-6 text-slate-400 font-medium">Signal</th>
-                      <th className="text-center py-2 text-gray-400">Data Source</th>
+                      <th className="text-center py-4 px-6 text-slate-400 font-medium">WS Status</th>
                       <th className="text-center py-4 px-6 text-slate-400 font-medium">Confidence</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {marketData.map(data => {
-                      const signal = signals.find(s => s.symbol === data.symbol);
-                      return (
-                        <tr 
-                          key={data.symbol} 
-                          className="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors cursor-pointer"
-                          onClick={() => setSelectedSymbol(data.symbol)}
-                        >
-                          <td className="py-4 px-6">
-                            <div className="font-semibold text-white">{data.symbol}</div>
-                          </td>
-                          <td className="py-4 px-6 text-right">
-                            <div className="text-white font-mono text-lg">
-                              ${data.price.toLocaleString('en-US', { 
-                                minimumFractionDigits: 2, 
-                                maximumFractionDigits: 8 
-                              })}
-                            </div>
-                          </td>
-                          <td className="py-4 px-6 text-right">
-                            <div className={`font-mono font-bold ${
-                              data.change_24h >= 0 ? 'text-emerald-400' : 'text-red-400'
-                            }`}>
-                              {data.change_24h >= 0 ? '+' : ''}{data.change_24h.toFixed(2)}%
-                            </div>
-                          </td>
-                          <td className="py-4 px-6 text-right">
-                            <div className="text-slate-300 font-mono">
-                              ${(data.volume / 1000000).toFixed(1)}M
-                            </div>
-                          </td>
-                          <td className="py-4 px-6 text-center">
-                            {signal ? (
-                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                signal.action === 'BUY' 
-                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                  : signal.action === 'SELL'
-                                  ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                                  : 'bg-slate-600/20 text-slate-400 border border-slate-500/30'
-                              }`}>
-                                {signal.action}
-                              </span>
-                            ) : (
-                              <span className="text-slate-500 text-xs">No Signal</span>
-                            )}
-                          </td>
-                          <td className="py-3 text-center">
-                            <span className="px-2 py-1 rounded text-xs bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                              KuCoin
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 text-center">
-                            {signal ? (
-                              <div className="text-white font-medium">
-                                {(signal.confidence * 100).toFixed(0)}%
-                              </div>
-                            ) : (
-                              <span className="text-slate-500">-</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    <tr className="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
+                      <td className="py-4 px-6">
+                        <div className="font-semibold text-white">{currentSymbol}</div>
+                      </td>
+                      <td className="py-4 px-6 text-right">
+                        <div className="text-green-400 font-mono">
+                          ${ticker?.bid.toFixed(2) || '--'}
+                        </div>
+                      </td>
+                      <td className="py-4 px-6 text-right">
+                        <div className="text-red-400 font-mono">
+                          ${ticker?.ask.toFixed(2) || '--'}
+                        </div>
+                      </td>
+                      <td className="py-4 px-6 text-right">
+                        <div className="text-white font-mono text-lg">
+                          ${ticker?.last.toFixed(2) || '--'}
+                        </div>
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        {lastSignal ? (
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                            lastSignal.direction === 'LONG' 
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                          }`}>
+                            {lastSignal.direction}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 text-xs">No Signal</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                          connectionStatus === 'connected'
+                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                            : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                        }`}>
+                          {connectionStatus}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        {lastSignal ? (
+                          <div className="text-white font-medium">
+                            {lastSignal.confidence}%
+                          </div>
+                        ) : (
+                          <span className="text-slate-500">-</span>
+                        )}
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
+
+              {/* PnL Summary from ZUSTAND */}
+              {pnlSummary && (
+                <div className="mt-6 grid grid-cols-3 gap-4">
+                  <div className="bg-gray-700/30 rounded-lg p-4">
+                    <div className="text-sm text-gray-400 mb-1">Realized PnL</div>
+                    <div className={`text-2xl font-bold ${pnlSummary.realized >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      ${pnlSummary.realized.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="bg-gray-700/30 rounded-lg p-4">
+                    <div className="text-sm text-gray-400 mb-1">Unrealized PnL</div>
+                    <div className={`text-2xl font-bold ${pnlSummary.unrealized >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      ${pnlSummary.unrealized.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="bg-gray-700/30 rounded-lg p-4">
+                    <div className="text-sm text-gray-400 mb-1">Total PnL</div>
+                    <div className={`text-2xl font-bold ${pnlSummary.total >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      ${pnlSummary.total.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Risk Snapshot from ZUSTAND */}
+              {riskSnapshot && (
+                <div className="mt-6 grid grid-cols-2 gap-4">
+                  <div className="bg-gray-700/30 rounded-lg p-4">
+                    <div className="text-sm text-gray-400 mb-1">Liquidation Risk</div>
+                    <div className="text-2xl font-bold text-yellow-400">
+                      {riskSnapshot.liquidationRisk.toFixed(1)}%
+                    </div>
+                  </div>
+                  <div className="bg-gray-700/30 rounded-lg p-4">
+                    <div className="text-sm text-gray-400 mb-1">Margin Usage</div>
+                    <div className="text-2xl font-bold text-cyan-400">
+                      {riskSnapshot.marginUsage.toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

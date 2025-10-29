@@ -1,288 +1,176 @@
-import React, { useState } from 'react';
-import { Search, TrendingUp } from 'lucide-react';
-import { useScannerConfig } from '../state/hooks';
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { api } from '../services/api';
-import { ScanResponse, ScanResult } from '../types';
-import ScoreGauge from './showcase/ScoreGauge';
-import DirectionPill from './showcase/DirectionPill';
-import Loading from './Loading';
-import Empty from './Empty';
-import ErrorBlock from './ErrorBlock';
+import { realtimeTradingWs } from '../services/websocket';
+import { playSound } from '../utils/sound';
+import { Search, Play, Pause, RefreshCw, AlertCircle } from 'lucide-react';
+import ResultsTable from './scanner/ResultsTable';
+import ResultsGrid from './scanner/ResultsGrid';
+import ResultsChart from './scanner/ResultsChart';
+import ScannerHeatmap from './scanner/ScannerHeatmap';
 
-interface MarketScannerProps {
-  onOpenDetails?: (symbol: string) => void;
+interface ScanResult {
+  symbol: string;
+  score: number;
+  signals: number;
+  price: number;
+  change_24h: number;
 }
 
-export const MarketScanner: React.FC<MarketScannerProps> = ({ onOpenDetails }) => {
-  const config = useScannerConfig();
-  const [isScanning, setIsScanning] = useState(false);
+const MarketScanner: React.FC = () => {
   const [results, setResults] = useState<ScanResult[]>([]);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasScanned, setHasScanned] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [viewMode, setViewMode] = useState<'table' | 'grid' | 'chart' | 'heatmap'>('table');
+  const [isConnected, setIsConnected] = useState(false);
+  const [selectedSymbols, setSelectedSymbols] = useState<Set<string>>(new Set());
 
-  // Local symbol and timeframe input (editable)
-  const [symbolsInput, setSymbolsInput] = useState(config.symbols.join(', '));
-  const [timeframesInput, setTimeframesInput] = useState(config.timeframes.join(', '));
+  useEffect(() => {
+    connectWebSocket();
+    return () => realtimeTradingWs.disconnect();
+  }, []);
 
-  const handleScan = async () => {
-    setIsScanning(true);
-    setError(null);
-    setHasScanned(true);
-
-    try {
-      // Parse inputs
-      const symbols = symbolsInput.split(',').map(s => s.trim()).filter(Boolean);
-      const timeframes = timeframesInput.split(',').map(t => t.trim()).filter(Boolean);
-
-      if (symbols.length === 0) {
-        throw new Error('لطفاً حداقل یک نماد وارد کنید');
-      }
-      if (timeframes.length === 0) {
-        throw new Error('لطفاً حداقل یک بازه زمانی وارد کنید');
-      }
-
-      const scanRequest = {
-        symbols,
-        timeframes,
-        weights: config.weights,
-        rules: {
-          min_score: config.rules.any_tf,
-          min_confidence: config.rules.majority_tf,
-          max_risk_level: config.rules.mode === 'aggressive' ? 'HIGH' : 'MEDIUM'
+  const connectWebSocket = () => {
+    realtimeTradingWs.connect();
+    realtimeTradingWs.onStateChange((state) => setIsConnected(state === 'connected'));
+    realtimeTradingWs.onMessage((event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'scan_result') {
+          setResults(prev => [message.data, ...prev].slice(0, 100));
         }
-      };
+      } catch (err) {
+        console.error('WebSocket error:', err);
+      }
+    });
+  };
 
-      console.log('Scanner request:', scanRequest);
-      const response = await api.trading.runScanner(scanRequest);
-      
-      // Be tolerant to backend response variations
-      const scanResults = response.results || response.result || [];
-      
-      // Sort by score (descending)
-      const sorted = scanResults.sort((a, b) => {
-        const scoreA = a.overall_score ?? a.final_score ?? a.score ?? 0;
-        const scoreB = b.overall_score ?? b.final_score ?? b.score ?? 0;
-        return scoreB - scoreA;
-      });
-
-      setResults(sorted);
+  const startScan = async () => {
+    try {
+      setLoading(true);
       setError(null);
-    } catch (err: any) {
-      console.error('Scanner error:', err);
-      setError(err.message || 'خطا در اسکن بازار');
-      setResults([]);
+      setIsScanning(true);
+      const response = await api.scanner.startScan({ strategy: 'aggressive' });
+      setResults(response.results || []);
+      
+      // Play sound when scan completes
+      try {
+        await playSound.scanComplete();
+      } catch (err) {
+        console.log('Sound playback skipped for scan:', err);
+      }
+    } catch (err) {
+      setError('Scan failed');
+      console.error('Scan error:', err);
     } finally {
-      setIsScanning(false);
+      setLoading(false);
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !isScanning) {
-      handleScan();
-    }
+  const stopScan = () => {
+    setIsScanning(false);
   };
-
-  // Helper to extract score from result
-  const getScore = (result: ScanResult): number => {
-    return result.overall_score ?? result.final_score ?? result.score ?? 0;
+  
+  const handleToggleSelection = (symbol: string) => {
+    setSelectedSymbols(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(symbol)) {
+        newSet.delete(symbol);
+      } else {
+        newSet.add(symbol);
+      }
+      return newSet;
+    });
   };
-
-  // Helper to extract direction from result
-  const getDirection = (result: ScanResult): 'BULLISH' | 'BEARISH' | 'NEUTRAL' => {
-    return result.overall_direction ?? result.direction ?? 'NEUTRAL';
-  };
-
-  // Helper to extract timeframe count
-  const getTfCount = (result: ScanResult): number => {
-    return result.tf_count ?? result.timeframes?.length ?? 0;
+  
+  const handleViewDetails = (symbol: string) => {
+    console.log(`Viewing details for ${symbol}`);
+    // Implement view details functionality
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-white mb-2">اسکنر بازار</h2>
-          <p className="text-slate-400 text-sm">
-            اسکن چند بازه زمانی با استراتژی ترکیبی الگوریتم‌ها
-          </p>
-        </div>
-      </div>
-
-      {/* Input Section */}
-      <div className="bg-gray-800/30 backdrop-blur-lg rounded-2xl p-6 border border-gray-700/50">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          {/* Symbols Input */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              نمادها (با کاما جدا کنید)
-            </label>
-            <input
-              type="text"
-              value={symbolsInput}
-              onChange={(e) => setSymbolsInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="BTCUSDT, ETHUSDT, SOLUSDT"
-              className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:border-cyan-500/50 focus:outline-none"
-              disabled={isScanning}
-            />
+      <motion.div
+        className="flex items-center justify-between flex-wrap gap-4"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-purple-500/20 rounded-lg">
+            <Search className="w-6 h-6 text-purple-400" />
           </div>
-
-          {/* Timeframes Input */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              بازه‌های زمانی (با کاما جدا کنید)
-            </label>
-            <input
-              type="text"
-              value={timeframesInput}
-              onChange={(e) => setTimeframesInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="15m, 1h, 4h"
-              className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:border-cyan-500/50 focus:outline-none"
-              disabled={isScanning}
-            />
+            <h2 className="text-2xl font-bold text-slate-50">Market Scanner</h2>
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
+              <p className="text-sm text-slate-400">{results.length} results</p>
+            </div>
           </div>
         </div>
 
-        {/* Scan Button */}
-        <button
-          onClick={handleScan}
-          disabled={isScanning}
-          className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
-            isScanning
-              ? 'bg-slate-600 cursor-not-allowed opacity-50'
-              : 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 hover:shadow-lg hover:shadow-cyan-500/25'
-          } text-white`}
-        >
-          <Search className={`w-5 h-5 ${isScanning ? 'animate-spin' : ''}`} />
-          <span>{isScanning ? 'در حال اسکن...' : 'اسکن بازار'}</span>
-        </button>
-      </div>
+        <div className="flex gap-2">
+          <div className="flex gap-1 bg-slate-800 p-1 rounded-lg">
+            {(['table', 'grid', 'chart', 'heatmap'] as const).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                className={`px-3 py-1.5 rounded text-sm font-medium capitalize transition-all ${
+                  viewMode === mode ? 'bg-cyan-500 text-white' : 'text-slate-400'
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
 
-      {/* Results Section */}
-      <div className="bg-gray-800/30 backdrop-blur-lg rounded-2xl p-6 border border-gray-700/50">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-white flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-gradient-to-r from-emerald-500 to-green-400 animate-pulse"></div>
-            نتایج اسکن
-          </h3>
-          {results.length > 0 && (
-            <span className="text-sm text-slate-400">
-              {results.length} فرصت پیدا شد
-            </span>
+          {isScanning ? (
+            <motion.button
+              onClick={stopScan}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold"
+            >
+              <Pause className="w-4 h-4" />
+              Stop
+            </motion.button>
+          ) : (
+            <motion.button
+              onClick={startScan}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg font-semibold shadow-lg disabled:opacity-50"
+            >
+              {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+              {loading ? 'Scanning...' : 'Start Scan'}
+            </motion.button>
           )}
         </div>
+      </motion.div>
 
-        {/* Loading State */}
-        {isScanning && <Loading message="در حال تحلیل نمادها..." />}
+      {error && (
+        <motion.div
+          className="bg-red-500/20 border border-red-500/50 rounded-xl p-4 flex items-center gap-3"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <AlertCircle className="w-5 h-5 text-red-400" />
+          <p className="text-slate-50">{error}</p>
+        </motion.div>
+      )}
 
-        {/* Error State */}
-        {!isScanning && error && (
-          <ErrorBlock
-            message={error}
-            onRetry={handleScan}
-          />
-        )}
-
-        {/* Empty State */}
-        {!isScanning && !error && hasScanned && results.length === 0 && (
-          <Empty
-            icon="🔍"
-            title="فرصتی یافت نشد"
-            description="هیچ نمادی با معیارهای تنظیم شده مطابقت نداشت. تنظیمات را تغییر دهید یا نمادهای بیشتری امتحان کنید."
-          />
-        )}
-
-        {/* Results Table */}
-        {!isScanning && !error && results.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-800/30 border-b border-slate-700/50">
-                  <th className="text-right py-3 px-4 text-slate-400 font-medium text-sm">
-                    نماد
-                  </th>
-                  <th className="text-center py-3 px-4 text-slate-400 font-medium text-sm">
-                    امتیاز نهایی
-                  </th>
-                  <th className="text-center py-3 px-4 text-slate-400 font-medium text-sm">
-                    جهت
-                  </th>
-                  <th className="text-center py-3 px-4 text-slate-400 font-medium text-sm">
-                    تعداد TF
-                  </th>
-                  <th className="text-center py-3 px-4 text-slate-400 font-medium text-sm">
-                    عملیات
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((result, index) => (
-                  <tr
-                    key={`${result.symbol}-${index}`}
-                    className="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && onOpenDetails) {
-                        onOpenDetails(result.symbol);
-                      }
-                    }}
-                  >
-                    {/* Symbol */}
-                    <td className="py-4 px-4">
-                      <div className="font-semibold text-white text-lg">
-                        {result.symbol}
-                      </div>
-                    </td>
-
-                    {/* Score Gauge */}
-                    <td className="py-4 px-4">
-                      <div className="flex justify-center">
-                        <ScoreGauge score={getScore(result)} size="sm" showLabel={false} />
-                      </div>
-                    </td>
-
-                    {/* Direction */}
-                    <td className="py-4 px-4">
-                      <div className="flex justify-center">
-                        <DirectionPill direction={getDirection(result)} size="sm" />
-                      </div>
-                    </td>
-
-                    {/* TF Count */}
-                    <td className="py-4 px-4 text-center">
-                      <span className="text-slate-300 font-mono">
-                        {getTfCount(result)}
-                      </span>
-                    </td>
-
-                    {/* Actions */}
-                    <td className="py-4 px-4 text-center">
-                      <button
-                        onClick={() => onOpenDetails && onOpenDetails(result.symbol)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/30 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        <TrendingUp className="w-4 h-4" />
-                        <span>جزئیات</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Initial State (before first scan) */}
-        {!isScanning && !error && !hasScanned && (
-          <Empty
-            icon="📊"
-            title="آماده برای اسکن"
-            description="نمادها و بازه‌های زمانی را وارد کنید و دکمه اسکن را فشار دهید"
-          />
-        )}
-      </div>
+      {viewMode === 'table' && (
+        <ResultsTable 
+          results={results} 
+          selectedSymbols={selectedSymbols} 
+          onToggleSelection={handleToggleSelection} 
+          onViewDetails={handleViewDetails} 
+        />
+      )}
+      {viewMode === 'grid' && <ResultsGrid results={results} />}
+      {viewMode === 'chart' && <ResultsChart results={results} />}
+      {viewMode === 'heatmap' && <ScannerHeatmap results={results} />}
     </div>
   );
 };

@@ -1,198 +1,361 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { OHLCVData } from '../types';
-import { BarChart3, Activity } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
+import { Line } from 'react-chartjs-2';
+import { getCandles, Candle } from '../services/api';
+import { useAppStore } from '../stores/useAppStore';
+import {
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  RefreshCw,
+  Maximize2,
+  AlertCircle,
+  Crosshair
+} from 'lucide-react';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+  ChartOptions
+} from 'chart.js';
 
-interface TradingChartProps {
-  symbol: string;
-  data: OHLCVData[];
-  indicators?: any;
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
+
+interface PriceData {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
 }
 
-const TradingChart: React.FC<TradingChartProps> = ({ symbol, data, indicators }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [chartDimensions, setChartDimensions] = useState({ width: 800, height: 400 });
+interface TradingChartProps {
+  symbol?: string;
+  timeframe?: '1m' | '5m' | '15m' | '1h' | '4h' | '1d';
+  height?: number;
+  showVolume?: boolean;
+  showIndicators?: boolean;
+  onCrosshairMove?: (price: number, time: number) => void;
+}
 
+const TradingChart: React.FC<TradingChartProps> = ({
+  symbol = 'BTCUSDT',
+  timeframe = '1h',
+  height = 400,
+  showVolume = true,
+  showIndicators = true,
+  onCrosshairMove
+}) => {
+  const [data, setData] = useState<PriceData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
+  const [priceChange, setPriceChange] = useState<number>(0);
+  const chartRef = useRef<any>(null);
+
+  // Read live ticker from store
+  const { ticker: liveTicker, connectionStatus: wsStatus } = useAppStore();
+  
+  // Update local state from store
   useEffect(() => {
-    if (data.length > 0) {
-      drawChart();
+    if (liveTicker && liveTicker.last) {
+      setCurrentPrice(liveTicker.last);
+      setIsConnected(wsStatus === 'connected');
     }
-  }, [data, chartDimensions]);
+  }, [liveTicker, wsStatus]);
 
   useEffect(() => {
-    const handleResize = () => {
-      const container = canvasRef.current?.parentElement;
-      if (container) {
-        setChartDimensions({
-          width: container.clientWidth - 32,
-          height: 400
-        });
-      }
+    fetchChartData();
+    const interval = setInterval(fetchChartData, 60000); // Refresh every minute
+    return () => {
+      clearInterval(interval);
     };
+  }, [symbol, timeframe]);
 
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  const drawChart = () => {
-    const canvas = canvasRef.current;
-    if (!canvas || data.length === 0) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    canvas.width = chartDimensions.width;
-    canvas.height = chartDimensions.height;
-
-    // Clear canvas
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Chart settings
-    const padding = 60;
-    const chartWidth = canvas.width - 2 * padding;
-    const chartHeight = canvas.height - 2 * padding;
-
-    // Calculate price range
-    const prices = data.flatMap(d => [d.open, d.high, d.low, d.close]);
-    const minPrice = Math.min(...prices);
-    const maxPrice = Math.max(...prices);
-    const priceRange = maxPrice - minPrice;
-
-    // Helper functions
-    const getX = (index: number) => padding + (index * chartWidth) / (data.length - 1);
-    const getY = (price: number) => padding + chartHeight - ((price - minPrice) / priceRange) * chartHeight;
-
-    // Draw grid
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 0.5;
-    
-    // Horizontal lines (price levels)
-    for (let i = 0; i <= 5; i++) {
-      const price = minPrice + (priceRange * i) / 5;
-      const y = getY(price);
+  const fetchChartData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const candles = await getCandles(symbol, timeframe, 100);
+      setData(candles);
       
-      ctx.beginPath();
-      ctx.moveTo(padding, y);
-      ctx.lineTo(canvas.width - padding, y);
-      ctx.stroke();
-      
-      // Price labels
-      ctx.fillStyle = '#64748b';
-      ctx.font = '12px monospace';
-      ctx.textAlign = 'right';
-      ctx.fillText(price.toFixed(2), padding - 10, y + 4);
-    }
-
-    // Vertical lines (time)
-    const timeInterval = Math.max(1, Math.floor(data.length / 8));
-    for (let i = 0; i < data.length; i += timeInterval) {
-      const x = getX(i);
-      
-      ctx.beginPath();
-      ctx.moveTo(x, padding);
-      ctx.lineTo(x, canvas.height - padding);
-      ctx.stroke();
-      
-      // Time labels
-      const timeStr = data[i].timestamp.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      });
-      ctx.fillStyle = '#64748b';
-      ctx.font = '10px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(timeStr, x, canvas.height - padding + 20);
-    }
-
-    // Draw candlesticks
-    data.forEach((candle, index) => {
-      const x = getX(index);
-      const openY = getY(candle.open);
-      const highY = getY(candle.high);
-      const lowY = getY(candle.low);
-      const closeY = getY(candle.close);
-
-      const isBullish = candle.close > candle.open;
-      const candleWidth = Math.max(1, chartWidth / data.length * 0.7);
-
-      // Wick
-      ctx.strokeStyle = isBullish ? '#10b981' : '#ef4444';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(x, highY);
-      ctx.lineTo(x, lowY);
-      ctx.stroke();
-
-      // Body
-      ctx.fillStyle = isBullish ? '#10b981' : '#ef4444';
-      const bodyHeight = Math.abs(closeY - openY);
-      const bodyY = Math.min(openY, closeY);
-      
-      ctx.fillRect(x - candleWidth / 2, bodyY, candleWidth, bodyHeight || 1);
-    });
-
-    // Draw moving averages if available
-    if (indicators?.ema_20) {
-      ctx.strokeStyle = '#8b5cf6';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      
-      indicators.ema_20.forEach((price: number, index: number) => {
-        const x = getX(index);
-        const y = getY(price);
-        
-        if (index === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
+      if (candles.length > 0) {
+        const latest = candles[candles.length - 1];
+        const previous = candles[candles.length - 2];
+        setCurrentPrice(latest.c); // c = close
+        if (previous) {
+          const change = ((latest.c - previous.c) / previous.c) * 100;
+          setPriceChange(change);
         }
-      });
-      ctx.stroke();
+      }
+    } catch (err) {
+      setError('Failed to load chart data');
+      console.error('Chart data error:', err);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // Draw current price line
-    const currentPrice = data[data.length - 1].close;
-    const currentY = getY(currentPrice);
-    
-    ctx.strokeStyle = '#06b6d4';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath();
-    ctx.moveTo(padding, currentY);
-    ctx.lineTo(canvas.width - padding, currentY);
-    ctx.stroke();
-    ctx.setLineDash([]);
+  // DISABLED: WebSocket is now managed by LiveDataProvider
+  // const connectWebSocket = () => {
+  //   realtimeTradingWs.connect();
+  //   ...
+  // };
 
-    // Current price label
-    ctx.fillStyle = '#06b6d4';
-    ctx.fillRect(canvas.width - padding + 5, currentY - 10, 80, 20);
-    ctx.fillStyle = '#0f172a';
-    ctx.font = '12px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(currentPrice.toFixed(2), canvas.width - padding + 45, currentY + 4);
+  if (loading && data.length === 0) {
+    return (
+      <div 
+        className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl flex items-center justify-center"
+        style={{ height }}
+      >
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500 mx-auto mb-4"></div>
+          <p className="text-slate-400">Loading chart...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && data.length === 0) {
+    return (
+      <div 
+        className="bg-slate-900/80 backdrop-blur-xl border border-red-500/50 rounded-xl flex items-center justify-center"
+        style={{ height }}
+      >
+        <div className="text-center p-8">
+          <AlertCircle className="text-red-400 mx-auto mb-4" size={48} />
+          <p className="text-slate-50 mb-4">{error}</p>
+          <button 
+            onClick={fetchChartData}
+            className="bg-cyan-500 hover:bg-cyan-600 text-white px-6 py-2 rounded-lg transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Prepare chart data
+  const chartData = {
+    labels: data.map(d => new Date(d.timestamp).toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    })),
+    datasets: [
+      {
+        label: symbol,
+        data: data.map(d => d.close),
+        borderColor: priceChange >= 0 ? '#4ade80' : '#f87171',
+        backgroundColor: priceChange >= 0 
+          ? 'rgba(74, 222, 128, 0.1)' 
+          : 'rgba(248, 113, 113, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 6,
+        pointHoverBackgroundColor: priceChange >= 0 ? '#4ade80' : '#f87171',
+        pointHoverBorderColor: '#fff',
+        pointHoverBorderWidth: 2,
+      }
+    ]
+  };
+
+  const chartOptions: ChartOptions<'line'> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: 'rgba(15, 23, 42, 0.95)',
+        titleColor: '#f8fafc',
+        bodyColor: '#cbd5e1',
+        borderColor: '#334155',
+        borderWidth: 1,
+        padding: 12,
+        displayColors: false,
+        callbacks: {
+          title: function(context) {
+            return data[context[0].dataIndex] 
+              ? new Date(data[context[0].dataIndex].timestamp).toLocaleString()
+              : '';
+          },
+          label: function(context) {
+            const candle = data[context.dataIndex];
+            if (!candle) return '';
+            return [
+              `Open: $${candle.open.toFixed(2)}`,
+              `High: $${candle.high.toFixed(2)}`,
+              `Low: $${candle.low.toFixed(2)}`,
+              `Close: $${candle.close.toFixed(2)}`,
+              `Volume: ${candle.volume.toLocaleString()}`
+            ];
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: { 
+          color: '#94a3b8',
+          font: { family: 'Inter', size: 10 },
+          maxRotation: 0
+        },
+        grid: { color: 'rgba(51, 65, 85, 0.2)' }
+      },
+      y: {
+        position: 'right',
+        ticks: { 
+          color: '#94a3b8',
+          font: { family: 'Inter', size: 11 },
+          callback: (value) => '$' + value.toLocaleString()
+        },
+        grid: { color: 'rgba(51, 65, 85, 0.3)' }
+      }
+    },
+    onHover: (event, elements) => {
+      if (elements.length > 0 && onCrosshairMove) {
+        const index = elements[0].index;
+        const candle = data[index];
+        if (candle) {
+          onCrosshairMove(candle.close, candle.timestamp);
+        }
+      }
+    }
   };
 
   return (
-    <div className="bg-slate-800/30 rounded-2xl border border-slate-700/50 overflow-hidden">
-      <div className="flex items-center justify-between p-4 border-b border-slate-700/50">
-        <div className="flex items-center space-x-3">
-          <BarChart3 className="w-5 h-5 text-cyan-400" />
-          <h3 className="text-lg font-semibold text-white">{symbol} Chart</h3>
+    <div className="space-y-4">
+      {/* Header */}
+      <motion.div
+        className="flex items-center justify-between flex-wrap gap-4"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="flex items-center gap-4">
+          <div>
+            <h3 className="text-2xl font-bold text-slate-50">{symbol}</h3>
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
+              <span className="text-xs text-slate-400">
+                {isConnected ? 'Live' : 'Disconnected'}
+              </span>
+            </div>
+          </div>
+
+          {currentPrice && (
+            <div className="text-right">
+              <div className="text-3xl font-bold text-slate-50">
+                ${currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div className={`flex items-center gap-1 text-sm font-semibold ${
+                priceChange >= 0 ? 'text-green-400' : 'text-red-400'
+              }`}>
+                {priceChange >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}%
+              </div>
+            </div>
+          )}
         </div>
-        <div className="flex items-center space-x-2 text-sm text-slate-400">
-          <Activity className="w-4 h-4" />
-          <span>{data.length} candles</span>
+
+        {/* Timeframe Selector */}
+        <div className="flex gap-2">
+          {(['1m', '5m', '15m', '1h', '4h', '1d'] as const).map(tf => (
+            <button
+              key={tf}
+              onClick={() => window.location.href = `?timeframe=${tf}`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                timeframe === tf
+                  ? 'bg-cyan-500 text-white'
+                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              {tf}
+            </button>
+          ))}
+          
+          <motion.button
+            onClick={fetchChartData}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            disabled={loading}
+            className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-50 rounded-lg transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </motion.button>
         </div>
-      </div>
-      
-      <div className="p-4">
-        <canvas 
-          ref={canvasRef}
-          className="w-full border border-slate-700/30 rounded-lg"
-          style={{ maxWidth: '100%', height: 'auto' }}
-        />
-      </div>
+      </motion.div>
+
+      {/* Chart */}
+      <motion.div
+        className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <div style={{ height }}>
+          <Line ref={chartRef} data={chartData} options={chartOptions} />
+        </div>
+      </motion.div>
+
+      {/* Stats */}
+      {data.length > 0 && (
+        <motion.div
+          className="grid grid-cols-2 md:grid-cols-4 gap-4"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-4">
+            <div className="text-xs text-slate-400 mb-1">24h High</div>
+            <div className="text-lg font-bold text-green-400">
+              ${Math.max(...data.map(d => d.high)).toFixed(2)}
+            </div>
+          </div>
+
+          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-4">
+            <div className="text-xs text-slate-400 mb-1">24h Low</div>
+            <div className="text-lg font-bold text-red-400">
+              ${Math.min(...data.map(d => d.low)).toFixed(2)}
+            </div>
+          </div>
+
+          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-4">
+            <div className="text-xs text-slate-400 mb-1">Volume</div>
+            <div className="text-lg font-bold text-cyan-400">
+              {data.reduce((sum, d) => sum + d.volume, 0).toLocaleString()}
+            </div>
+          </div>
+
+          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-4">
+            <div className="text-xs text-slate-400 mb-1">24h Change</div>
+            <div className={`text-lg font-bold ${priceChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}%
+            </div>
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 };

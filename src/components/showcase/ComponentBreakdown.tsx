@@ -1,5 +1,5 @@
 import React from 'react';
-import { ComponentScore } from '../types';
+import { ComponentScore } from '../../types/index';
 import DirectionPill from './DirectionPill';
 
 interface ComponentBreakdownProps {

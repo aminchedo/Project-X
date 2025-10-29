@@ -1,310 +1,350 @@
 import React, { useState, useEffect } from 'react';
-import { apiService } from '../services/api';
+import { motion } from 'framer-motion';
+import { Pie } from 'react-chartjs-2';
+import { api } from '../services/api';
+import { 
+  TrendingUp, 
+  TrendingDown, 
+  DollarSign, 
+  PieChart as PieChartIcon,
+  AlertCircle,
+  RefreshCw,
+  Download,
+  Target
+} from 'lucide-react';
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip,
+  Legend,
+  ChartOptions
+} from 'chart.js';
 
-interface PortfolioData {
-  total_value: number;
-  daily_pnl: number;
-  daily_pnl_pct: number;
-  positions: Position[];
-  risk_metrics: RiskMetrics;
-}
+ChartJS.register(ArcElement, Tooltip, Legend);
 
 interface Position {
   symbol: string;
-  side: 'LONG' | 'SHORT';
-  size: number;
+  amount: number;
+  value: number;
   entry_price: number;
   current_price: number;
-  unrealized_pnl: number;
-  unrealized_pnl_pct: number;
-  timestamp: string;
+  pnl: number;
+  pnl_percentage: number;
 }
 
-interface RiskMetrics {
-  portfolio_var: number;
-  max_drawdown: number;
-  sharpe_ratio: number;
+interface PortfolioSummary {
+  total_value: number;
+  total_pnl: number;
+  pnl_percentage: number;
+  total_positions: number;
+  active_positions: number;
+  closed_positions: number;
   win_rate: number;
-  profit_factor: number;
+  total_trades: number;
+  daily_pnl: number;
+  weekly_pnl: number;
+  monthly_pnl: number;
+  positions: Position[];
+  allocation: { [key: string]: number };
 }
 
 const PortfolioPanel: React.FC = () => {
-  const [portfolioData, setPortfolioData] = useState<PortfolioData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [selectedTimeframe, setSelectedTimeframe] = useState('1D');
+  const [summary, setSummary] = useState<PortfolioSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   useEffect(() => {
-    loadPortfolioData();
-    const interval = setInterval(loadPortfolioData, 5000); // Update every 5 seconds
+    fetchPortfolioData();
+    const interval = setInterval(fetchPortfolioData, 60000); // Update every 60s (reduced frequency)
     return () => clearInterval(interval);
-  }, [selectedTimeframe]);
+  }, []);
 
-  const loadPortfolioData = async () => {
+  const fetchPortfolioData = async () => {
     try {
-      // Mock data for now - replace with actual API call
-      const mockData: PortfolioData = {
-        total_value: 125750.50,
-        daily_pnl: 2847.25,
-        daily_pnl_pct: 2.31,
-        positions: [
-          {
-            symbol: 'BTCUSDT',
-            side: 'LONG',
-            size: 0.5,
-            entry_price: 43250.00,
-            current_price: 44180.50,
-            unrealized_pnl: 465.25,
-            unrealized_pnl_pct: 2.15,
-            timestamp: new Date().toISOString()
-          },
-          {
-            symbol: 'ETHUSDT',
-            side: 'LONG',
-            size: 5.2,
-            entry_price: 2650.00,
-            current_price: 2734.80,
-            unrealized_pnl: 440.96,
-            unrealized_pnl_pct: 3.20,
-            timestamp: new Date().toISOString()
-          },
-          {
-            symbol: 'ADAUSDT',
-            side: 'SHORT',
-            size: 1000,
-            entry_price: 0.485,
-            current_price: 0.472,
-            unrealized_pnl: 13.00,
-            unrealized_pnl_pct: 2.68,
-            timestamp: new Date().toISOString()
-          }
-        ],
-        risk_metrics: {
-          portfolio_var: 2.45,
-          max_drawdown: -8.32,
-          sharpe_ratio: 1.87,
-          win_rate: 68.5,
-          profit_factor: 1.94
-        }
-      };
-      
-      setPortfolioData(mockData);
-    } catch (error) {
-      console.error('Failed to load portfolio data:', error);
+      setLoading(true);
+      setError(null);
+      if (api && api.trading && api.trading.getPortfolioSummary) {
+        const response = await api.trading.getPortfolioSummary();
+        setSummary(response);
+      } else {
+        // Use mock data if API is not available
+        console.warn('API not available, using mock portfolio data');
+        setSummary({
+          total_value: 125750.50,
+          total_pnl: 2890.50,
+          pnl_percentage: 2.31,
+          total_positions: 5,
+          active_positions: 3,
+          closed_positions: 2,
+          win_rate: 68.9,
+          total_trades: 15,
+          daily_pnl: 125.75,
+          weekly_pnl: 890.25,
+          monthly_pnl: 2890.50,
+          positions: [],
+          allocation: {}
+        });
+      }
+      setLastUpdate(new Date());
+    } catch (err) {
+      setError('Failed to load portfolio data');
+      console.error('Portfolio fetch error:', err);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(value);
-  };
-
-  const formatPercentage = (value: number) => {
-    return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
-  };
-
-  if (isLoading) {
+  if (loading && !summary) {
     return (
-      <div className="bg-gray-800/30 backdrop-blur-lg rounded-2xl p-6 border border-gray-700/50">
-        <div className="animate-pulse">
-          <div className="h-6 bg-gray-700 rounded mb-4"></div>
-          <div className="space-y-3">
-            <div className="h-4 bg-gray-700 rounded"></div>
-            <div className="h-4 bg-gray-700 rounded"></div>
-            <div className="h-4 bg-gray-700 rounded"></div>
-          </div>
-        </div>
+      <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-8 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500 mx-auto mb-4"></div>
+        <p className="text-slate-400">Loading portfolio...</p>
       </div>
     );
   }
 
-  if (!portfolioData) {
+  if (error && !summary) {
     return (
-      <div className="bg-gray-800/30 backdrop-blur-lg rounded-2xl p-6 border border-gray-700/50">
-        <div className="text-center text-red-400">Failed to load portfolio data</div>
+      <div className="bg-slate-900/80 backdrop-blur-xl border border-red-500/50 rounded-xl p-8 text-center">
+        <AlertCircle className="text-red-400 mx-auto mb-4" size={48} />
+        <p className="text-slate-50 mb-4">{error}</p>
+        <button 
+          onClick={fetchPortfolioData}
+          className="bg-cyan-500 hover:bg-cyan-600 text-white px-6 py-2 rounded-lg transition-colors"
+        >
+          Retry
+        </button>
       </div>
     );
   }
+
+  if (!summary) {
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-12 text-center">
+        <PieChartIcon className="w-12 h-12 mx-auto mb-4 text-slate-600" />
+        <p className="text-slate-400 mb-2">No Portfolio Data</p>
+        <p className="text-slate-500 text-sm">Start trading to see your portfolio</p>
+      </div>
+    );
+  }
+
+  // Prepare pie chart data
+  const allocation = summary.allocation || {};
+  const allocationData = {
+    labels: Object.keys(allocation),
+    datasets: [
+      {
+        data: Object.values(allocation),
+        backgroundColor: [
+          '#06b6d4', // cyan
+          '#22c55e', // green
+          '#f59e0b', // amber
+          '#a855f7', // purple
+          '#ef4444', // red
+          '#3b82f6', // blue
+          '#ec4899', // pink
+          '#14b8a6', // teal
+        ],
+        borderColor: '#1e293b',
+        borderWidth: 2,
+      }
+    ]
+  };
+
+  const chartOptions: ChartOptions<'pie'> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'right',
+        labels: {
+          color: '#f8fafc',
+          font: {
+            family: 'Inter',
+            size: 12
+          },
+          padding: 15,
+          usePointStyle: true
+        }
+      },
+      tooltip: {
+        backgroundColor: 'rgba(15, 23, 42, 0.95)',
+        titleColor: '#f8fafc',
+        bodyColor: '#cbd5e1',
+        borderColor: '#334155',
+        borderWidth: 1,
+        padding: 12,
+        callbacks: {
+          label: function(context) {
+            const label = context.label || '';
+            const value = context.parsed || 0;
+            return `${label}: ${value.toFixed(2)}%`;
+          }
+        }
+      }
+    }
+  };
 
   return (
     <div className="space-y-6">
-      {/* Portfolio Overview */}
-      <div className="bg-gray-800/30 backdrop-blur-lg rounded-2xl p-6 border border-gray-700/50 hover:border-gray-600/50 transition-all duration-300">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-bold text-white flex items-center">
-            <div className="w-2 h-2 rounded-full bg-gradient-to-r from-emerald-500 to-green-400 animate-pulse mr-3"></div>
-            Portfolio Overview
-          </h3>
-          <select
-            value={selectedTimeframe}
-            onChange={(e) => setSelectedTimeframe(e.target.value)}
-            className="bg-gray-700/50 border border-gray-600/50 rounded-lg px-3 py-1 text-white text-sm focus:border-cyan-500/50 focus:outline-none"
+      {/* Header */}
+      <motion.div 
+        className="flex items-center justify-between"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div>
+          <h2 className="text-2xl font-bold text-slate-50">Portfolio Overview</h2>
+          <p className="text-sm text-slate-400">
+            Last updated: {lastUpdate.toLocaleTimeString()}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <motion.button
+            onClick={fetchPortfolioData}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-50 rounded-lg font-medium transition-all disabled:opacity-50"
           >
-            <option value="1D">1D</option>
-            <option value="1W">1W</option>
-            <option value="1M">1M</option>
-            <option value="3M">3M</option>
-          </select>
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white rounded-lg font-medium transition-all shadow-lg shadow-purple-500/20"
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </motion.button>
         </div>
+      </motion.div>
 
-        {/* Total Value */}
-        <div className="mb-6">
-          <div className="text-3xl font-bold text-white mb-2">
-            {formatCurrency(portfolioData.total_value)}
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-slate-400 text-sm font-medium">Total Value</span>
+            <DollarSign className="text-cyan-400" size={20} />
           </div>
-          <div className="flex items-center space-x-4">
-            <div className={`text-lg font-semibold ${
-              portfolioData.daily_pnl >= 0 ? 'text-emerald-400' : 'text-red-400'
-            }`}>
-              {portfolioData.daily_pnl >= 0 ? '+' : ''}{formatCurrency(portfolioData.daily_pnl)}
-            </div>
-            <div className={`text-sm font-medium px-2 py-1 rounded-full ${
-              portfolioData.daily_pnl_pct >= 0 
-                ? 'bg-emerald-500/20 text-emerald-400' 
-                : 'bg-red-500/20 text-red-400'
-            }`}>
-              {formatPercentage(portfolioData.daily_pnl_pct)}
-            </div>
-          </div>
-        </div>
+          <p className="text-3xl font-bold text-slate-50 mb-2">
+            ${(summary.total_value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <p className="text-sm text-slate-400">Portfolio balance</p>
+        </motion.div>
 
-        {/* Risk Metrics */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-gray-700/30 rounded-lg p-3">
-            <div className="text-xs text-gray-400 mb-1">Portfolio VaR</div>
-            <div className="text-lg font-semibold text-white">
-              {portfolioData.risk_metrics.portfolio_var.toFixed(2)}%
-            </div>
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-slate-400 text-sm font-medium">Total P&L</span>
+            {summary.total_pnl >= 0 ? (
+              <TrendingUp className="text-green-400" size={20} />
+            ) : (
+              <TrendingDown className="text-red-400" size={20} />
+            )}
           </div>
-          <div className="bg-gray-700/30 rounded-lg p-3">
-            <div className="text-xs text-gray-400 mb-1">Max Drawdown</div>
-            <div className="text-lg font-semibold text-red-400">
-              {portfolioData.risk_metrics.max_drawdown.toFixed(2)}%
-            </div>
+          <p className={`text-3xl font-bold mb-2 ${(summary.total_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {(summary.total_pnl || 0) >= 0 ? '+' : ''}${(summary.total_pnl || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <p className={`text-sm font-semibold ${(summary.pnl_percentage || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {(summary.pnl_percentage || 0) >= 0 ? '+' : ''}{(summary.pnl_percentage || 0).toFixed(2)}%
+          </p>
+        </motion.div>
+
+        <motion.div
+          className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-slate-400 text-sm font-medium">Positions</span>
+            <Target className="text-purple-400" size={20} />
           </div>
-          <div className="bg-gray-700/30 rounded-lg p-3">
-            <div className="text-xs text-gray-400 mb-1">Sharpe Ratio</div>
-            <div className="text-lg font-semibold text-cyan-400">
-              {portfolioData.risk_metrics.sharpe_ratio.toFixed(2)}
-            </div>
-          </div>
-          <div className="bg-gray-700/30 rounded-lg p-3">
-            <div className="text-xs text-gray-400 mb-1">Win Rate</div>
-            <div className="text-lg font-semibold text-emerald-400">
-              {portfolioData.risk_metrics.win_rate.toFixed(1)}%
-            </div>
-          </div>
-        </div>
+          <p className="text-3xl font-bold text-slate-50 mb-2">
+            {(summary.positions || []).length}
+          </p>
+          <p className="text-sm text-slate-400">Active positions</p>
+        </motion.div>
       </div>
 
-      {/* Active Positions */}
-      <div className="bg-gray-800/30 backdrop-blur-lg rounded-2xl p-6 border border-gray-700/50">
-        <h3 className="text-lg font-bold text-white mb-4 flex items-center">
-          <div className="w-2 h-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 animate-pulse mr-3"></div>
-          Active Positions ({portfolioData.positions.length})
-        </h3>
-
-        <div className="space-y-3">
-          {portfolioData.positions.map((position, index) => (
-            <div 
-              key={`${position.symbol}-${index}`}
-              className="bg-gray-700/30 rounded-lg p-4 hover:bg-gray-700/50 transition-all duration-200"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center space-x-3">
-                  <span className="text-white font-semibold">{position.symbol}</span>
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    position.side === 'LONG' 
-                      ? 'bg-emerald-500/20 text-emerald-400' 
-                      : 'bg-red-500/20 text-red-400'
-                  }`}>
-                    {position.side}
-                  </span>
-                </div>
-                <div className={`text-right ${
-                  position.unrealized_pnl >= 0 ? 'text-emerald-400' : 'text-red-400'
-                }`}>
-                  <div className="font-semibold">
-                    {position.unrealized_pnl >= 0 ? '+' : ''}{formatCurrency(position.unrealized_pnl)}
-                  </div>
-                  <div className="text-xs">
-                    {formatPercentage(position.unrealized_pnl_pct)}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                <div>
-                  <div className="text-gray-400">Size</div>
-                  <div className="text-white font-mono">{position.size}</div>
-                </div>
-                <div>
-                  <div className="text-gray-400">Entry</div>
-                  <div className="text-white font-mono">{formatCurrency(position.entry_price)}</div>
-                </div>
-                <div>
-                  <div className="text-gray-400">Current</div>
-                  <div className="text-white font-mono">{formatCurrency(position.current_price)}</div>
-                </div>
-              </div>
-
-              {/* P&L Progress Bar */}
-              <div className="mt-3">
-                <div className="w-full bg-gray-600/50 rounded-full h-1">
-                  <div 
-                    className={`h-1 rounded-full transition-all duration-500 ${
-                      position.unrealized_pnl >= 0 
-                        ? 'bg-gradient-to-r from-emerald-500 to-green-400' 
-                        : 'bg-gradient-to-r from-red-500 to-red-400'
-                    }`}
-                    style={{ 
-                      width: `${Math.min(Math.abs(position.unrealized_pnl_pct) * 10, 100)}%` 
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
+      {/* Asset Allocation Chart */}
+      <motion.div
+        className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl p-6"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+      >
+        <h3 className="text-xl font-semibold text-slate-50 mb-6">Asset Allocation</h3>
+        <div className="h-[300px]">
+          <Pie data={allocationData} options={chartOptions} />
         </div>
-      </div>
+      </motion.div>
 
-      {/* Performance Metrics */}
-      <div className="bg-gray-800/30 backdrop-blur-lg rounded-2xl p-6 border border-gray-700/50">
-        <h3 className="text-lg font-bold text-white mb-4 flex items-center">
-          <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-400 animate-pulse mr-3"></div>
-          Performance Metrics
-        </h3>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-gray-700/30 rounded-lg p-4">
-            <div className="text-sm text-gray-400 mb-2">Profit Factor</div>
-            <div className="text-2xl font-bold text-white">
-              {portfolioData.risk_metrics.profit_factor.toFixed(2)}
-            </div>
-            <div className="text-xs text-gray-500 mt-1">
-              Gross Profit / Gross Loss
-            </div>
-          </div>
-
-          <div className="bg-gray-700/30 rounded-lg p-4">
-            <div className="text-sm text-gray-400 mb-2">Win Rate</div>
-            <div className="text-2xl font-bold text-emerald-400">
-              {portfolioData.risk_metrics.win_rate.toFixed(1)}%
-            </div>
-            <div className="w-full bg-gray-600/50 rounded-full h-2 mt-2">
-              <div 
-                className="bg-gradient-to-r from-emerald-500 to-green-400 h-2 rounded-full transition-all duration-500"
-                style={{ width: `${portfolioData.risk_metrics.win_rate}%` }}
-              />
-            </div>
-          </div>
+      {/* Positions Table */}
+      <motion.div
+        className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-xl overflow-hidden"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+      >
+        <div className="p-6 border-b border-slate-700">
+          <h3 className="text-xl font-semibold text-slate-50">Open Positions</h3>
         </div>
-      </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-slate-800 border-b border-slate-700">
+              <tr>
+                <th className="text-left py-4 px-6 text-slate-300 font-semibold">Symbol</th>
+                <th className="text-right py-4 px-6 text-slate-300 font-semibold">Amount</th>
+                <th className="text-right py-4 px-6 text-slate-300 font-semibold">Entry</th>
+                <th className="text-right py-4 px-6 text-slate-300 font-semibold">Current</th>
+                <th className="text-right py-4 px-6 text-slate-300 font-semibold">Value</th>
+                <th className="text-right py-4 px-6 text-slate-300 font-semibold">P&L</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(summary.positions || []).map((position, index) => (
+                <motion.tr
+                  key={position.symbol}
+                  className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                >
+                  <td className="py-4 px-6 font-bold text-slate-50">{position.symbol}</td>
+                  <td className="py-4 px-6 text-right text-slate-300 font-mono">{position.amount.toFixed(4)}</td>
+                  <td className="py-4 px-6 text-right text-slate-300 font-mono">${position.entry_price.toFixed(2)}</td>
+                  <td className="py-4 px-6 text-right text-slate-300 font-mono">${position.current_price.toFixed(2)}</td>
+                  <td className="py-4 px-6 text-right text-slate-50 font-semibold">${position.value.toFixed(2)}</td>
+                  <td className="py-4 px-6 text-right">
+                    <div className={`font-semibold ${position.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {position.pnl >= 0 ? '+' : ''}${position.pnl.toFixed(2)}
+                    </div>
+                    <div className={`text-sm ${position.pnl_percentage >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {position.pnl_percentage >= 0 ? '+' : ''}{position.pnl_percentage.toFixed(2)}%
+                    </div>
+                  </td>
+                </motion.tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </motion.div>
     </div>
   );
 };

@@ -12,6 +12,7 @@ import {
   Smartphone
 } from 'lucide-react';
 import { ProfessionalCard } from './Layout/ProfessionalLayout';
+import { soundManager } from '../utils/sound';
 
 interface AccessibilitySettings {
   highContrast: boolean;
@@ -65,6 +66,12 @@ export const AccessibilityEnhancer: React.FC<AccessibilityEnhancerProps> = ({
   useEffect(() => {
     // Apply accessibility settings
     applyAccessibilitySettings(settings);
+    
+    // Sync sound settings with sound manager
+    soundManager.updateConfig({
+      soundEnabled: settings.soundEnabled,
+      volume: 0.5
+    });
   }, [settings]);
 
   useEffect(() => {

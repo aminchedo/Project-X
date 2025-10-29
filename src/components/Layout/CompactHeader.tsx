@@ -1,130 +1,77 @@
-import React, { useState } from 'react';
-import { Search, Bell, Settings, Menu } from 'lucide-react';
-import { AssetSelector } from './AssetSelector';
+import React from 'react';
+import { motion } from 'framer-motion';
+import { Activity, Bell, Search, TrendingUp, TrendingDown } from 'lucide-react';
 
-interface TimeframeOption {
-  id: string;
-  label: string;
+interface MarketTicker {
+  symbol: string;
+  price: number;
+  change: number;
 }
 
 interface CompactHeaderProps {
-  selectedSymbol: string;
-  onSymbolChange: (symbol: string) => void;
-  selectedTimeframe?: string;
-  onTimeframeChange?: (timeframe: string) => void;
-  onMenuToggle?: () => void;
-  showMenu?: boolean;
+  tickers?: MarketTicker[];
 }
 
-const TIMEFRAMES: TimeframeOption[] = [
-  { id: '1h', label: '1H' },
-  { id: '4h', label: '4H' },
-  { id: '1d', label: '1D' },
-  { id: '1w', label: '1W' },
-];
-
-export const CompactHeader: React.FC<CompactHeaderProps> = ({
-  selectedSymbol,
-  onSymbolChange,
-  selectedTimeframe = '1h',
-  onTimeframeChange = () => {},
-  onMenuToggle,
-  showMenu = true,
+const CompactHeader: React.FC<CompactHeaderProps> = ({ 
+  tickers = [
+    { symbol: 'BTC', price: 43250, change: 2.4 },
+    { symbol: 'ETH', price: 2280, change: -1.2 },
+    { symbol: 'BNB', price: 315, change: 3.8 },
+    { symbol: 'SOL', price: 98, change: 5.2 },
+  ]
 }) => {
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-
   return (
-    <header 
-      className="hts-topbar sticky top-0 z-40"
-      role="banner"
-      aria-label="Main navigation"
+    <motion.header
+      className="bg-slate-900/80 backdrop-blur-xl border-b border-slate-700/50 sticky top-0 z-50"
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
     >
-      {/* Left Section */}
-      <div className="tb-left">
-        {showMenu && (
-          <button
-            className="tb-burger"
-            onClick={onMenuToggle}
-            aria-label="Toggle menu"
-            aria-expanded="false"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-        )}
-        
-        <div className="tb-brand" aria-label="HTS Trading">
-          HTS Trading
+      <div className="px-4 py-2">
+        <div className="flex items-center justify-between gap-4">
+          {/* Logo */}
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
+              <Activity className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-lg font-bold text-slate-50 hidden sm:inline">BoltAI</span>
+          </div>
+
+          {/* Market Tickers */}
+          <div className="flex-1 flex items-center gap-4 overflow-x-auto scrollbar-hide px-4">
+            {tickers.map((ticker) => (
+              <motion.div
+                key={ticker.symbol}
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-lg whitespace-nowrap"
+                whileHover={{ scale: 1.05 }}
+              >
+                <span className="text-sm font-medium text-slate-300">{ticker.symbol}</span>
+                <span className="text-sm font-bold text-slate-50">
+                  ${ticker.price.toLocaleString()}
+                </span>
+                <div className={`flex items-center gap-1 text-xs font-semibold ${
+                  ticker.change >= 0 ? 'text-green-400' : 'text-red-400'
+                }`}>
+                  {ticker.change >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                  {Math.abs(ticker.change)}%
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            <button className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
+              <Search className="w-5 h-5 text-slate-50" />
+            </button>
+            <button className="relative p-2 hover:bg-slate-800 rounded-lg transition-colors">
+              <Bell className="w-5 h-5 text-slate-50" />
+              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+            </button>
+          </div>
         </div>
-        
-        <nav className="tb-crumbs" aria-label="Breadcrumb">
-          <span>Core Trading</span>
-          <span aria-hidden="true">›</span>
-          <strong>Overview</strong>
-        </nav>
       </div>
-
-      {/* Center Section - Timeframe Tabs */}
-      <div className="tb-center" role="tablist" aria-label="Timeframe selection">
-        {TIMEFRAMES.map((tf) => (
-          <button
-            key={tf.id}
-            role="tab"
-            aria-selected={selectedTimeframe === tf.id}
-            aria-label={`${tf.label} timeframe`}
-            className={`tf-tab ${selectedTimeframe === tf.id ? 'is-active' : ''}`}
-            onClick={() => onTimeframeChange(tf.id)}
-          >
-            {tf.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Right Section */}
-      <div className="tb-right">
-        <AssetSelector 
-          selectedSymbol={selectedSymbol}
-          onSymbolChange={onSymbolChange}
-        />
-        
-        {/* Global Search */}
-        <div className="tb-search" role="search">
-          <Search className="w-4 h-4 text-slate-400" aria-hidden="true" />
-          <input
-            type="text"
-            placeholder="Search..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="Global search"
-            className="focus:outline-none focus-visible:outline-none"
-          />
-        </div>
-
-        {/* Notifications */}
-        <button 
-          className="tb-action relative"
-          aria-label="Notifications"
-        >
-          <Bell className="w-5 h-5" aria-hidden="true" />
-          <span 
-            className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-br from-pink-400 to-pink-600 rounded-full text-[10px] font-bold flex items-center justify-center"
-            aria-label="3 unread notifications"
-          >
-            3
-          </span>
-        </button>
-
-        {/* Settings */}
-        <button 
-          className="tb-action"
-          aria-label="Settings"
-        >
-          <Settings className="w-5 h-5" aria-hidden="true" />
-        </button>
-      </div>
-    </header>
+    </motion.header>
   );
 };
 
 export default CompactHeader;
-

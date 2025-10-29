@@ -13,6 +13,7 @@ import {
   Send,
   Loader2
 } from 'lucide-react';
+import { api } from '../services/api';
 
 interface SentimentAnalysis {
   average_sentiment: number;
@@ -61,18 +62,12 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ selectedSymbol, onSym
     setIsLoading(true);
     try {
       // Load comprehensive insights
-      const insightsResponse = await fetch(`/api/ai/insights/${selectedSymbol}`);
-      if (insightsResponse.ok) {
-        const insightsData = await insightsResponse.json();
-        setInsights(insightsData);
-      }
+      const insightsData = await api.getAIInsights(selectedSymbol);
+      setInsights(insightsData);
 
       // Load sentiment analysis
-      const sentimentResponse = await fetch(`/api/ai/sentiment/${selectedSymbol}`);
-      if (sentimentResponse.ok) {
-        const sentimentData = await sentimentResponse.json();
-        setSentiment(sentimentData);
-      }
+      const sentimentData = await api.getAISentiment(selectedSymbol);
+      setSentiment(sentimentData);
 
     } catch (error) {
       console.error('Error loading AI insights:', error);
@@ -84,26 +79,13 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ selectedSymbol, onSym
   const generateMarketAnalysis = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/ai/market-analysis', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          symbol: selectedSymbol,
-          market_data: {
-            symbol: selectedSymbol,
-            price: 100,
-            volume: 1000000,
-            change_24h: 2.5
-          }
-        })
+      const data = await api.generateMarketAnalysis(selectedSymbol, {
+        symbol: selectedSymbol,
+        price: 100,
+        volume: 1000000,
+        change_24h: 2.5
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setMarketAnalysis(data.analysis);
-      }
+      setMarketAnalysis(data.analysis);
     } catch (error) {
       console.error('Error generating market analysis:', error);
       setMarketAnalysis('Unable to generate market analysis at this time.');
@@ -119,21 +101,8 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ selectedSymbol, onSym
     try {
       const context = `Current market data for ${selectedSymbol}: ${JSON.stringify(insights)}`;
       
-      const response = await fetch('/api/ai/ask-question', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          question: question,
-          context: context
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAiResponse(data.answer);
-      }
+      const data = await api.askAIQuestion(question, context);
+      setAiResponse(data.answer);
     } catch (error) {
       console.error('Error asking AI question:', error);
       setAiResponse('Unable to process your question at this time.');
@@ -163,7 +132,11 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ selectedSymbol, onSym
     }
   };
 
-  const tabs = [
+  const tabs: Array<{
+    id: 'insights' | 'sentiment' | 'analysis' | 'chat';
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }> = [
     { id: 'insights', label: 'AI Insights', icon: Brain },
     { id: 'sentiment', label: 'Sentiment', icon: BarChart3 },
     { id: 'analysis', label: 'Analysis', icon: FileText },
@@ -200,7 +173,7 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ selectedSymbol, onSym
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id)}
               className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 flex-1 justify-center ${
                 activeTab === tab.id
                   ? 'bg-purple-600 text-white'
@@ -389,6 +362,8 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ selectedSymbol, onSym
               <div className="space-y-4">
                 <div className="flex space-x-2">
                   <input
+                    id="ai-question"
+                    name="ai-question"
                     type="text"
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}

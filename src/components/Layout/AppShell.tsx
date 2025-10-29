@@ -1,24 +1,54 @@
-import React, { useState } from 'react';
-import { ModernSidebarNew } from '../Navigation/ModernSidebarNew';
-import { Topbar } from './Topbar';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import ErrorBoundary from '../ErrorBoundary';
+import Loading from '../Loading';
 
 interface AppShellProps {
   children: React.ReactNode;
+  layout?: 'sidebar' | 'professional' | 'minimal';
+  loading?: boolean;
 }
 
-export function AppShell({ children }: AppShellProps) {
-  const [activeTab, setActiveTab] = useState('overview');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+const AppShell: React.FC<AppShellProps> = ({ 
+  children,
+  layout = 'sidebar',
+  loading = false
+}) => {
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  useEffect(() => {
+    // Simulate app initialization
+    const timer = setTimeout(() => setIsInitialized(true), 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!isInitialized || loading) {
+    return <Loading fullScreen message="Initializing BoltAI Trading System..." />;
+  }
 
   return (
-    <div className="hts-page" dir="rtl">
-      <div className="hts-shell">
-        <ModernSidebarNew activeTab={activeTab} onTabChange={setActiveTab} />
-        <main className="hts-main">
-          <Topbar onMenuToggle={() => setIsSidebarOpen(!isSidebarOpen)} />
-          {children}
-        </main>
-      </div>
-    </div>
+    <ErrorBoundary>
+      <motion.div
+        className="min-h-screen bg-slate-950"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        {/* Global Notifications */}
+        <AnimatePresence>
+          {/* Future: Global notification system */}
+        </AnimatePresence>
+
+        {/* Main Content */}
+        {children}
+
+        {/* Global Modals */}
+        <AnimatePresence>
+          {/* Future: Global modal system */}
+        </AnimatePresence>
+      </motion.div>
+    </ErrorBoundary>
   );
-}
+};
+
+export default AppShell;

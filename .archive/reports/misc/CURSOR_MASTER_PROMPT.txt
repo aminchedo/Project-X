@@ -1,0 +1,38 @@
+You are Cursor Agent operating in a large TS/React + FastAPI project. Follow these rules strictly:
+- Create a new branch `fix/cursor-agent-setup`.
+- Do not delete existing architecture. Keep RTL and design system intact.
+- Backup anything you change. Keep changes minimal and scoped.
+- Never commit secrets. Move all API keys to env files.
+- Use conventional commits.
+
+Steps:
+1) Add files:
+   - Create `package.json` at repo root using the provided JSON.
+   - Create `.env.development` and `.env.production` at repo root.
+   - Create `src/services/api.ts` and `src/services/websocket.ts` with the provided content.
+   - Create `Dockerfile.backend`, `Dockerfile.frontend`, and `docker-compose.yml` at repo root.
+   - Create `backend/.env.example` and ensure a local `backend/.env` is ignored by Git.
+
+2) Replace any `process.env.REACT_APP_*` usage with `import.meta.env.VITE_*` across the frontend.
+
+3) Ensure WebSocket URLs use `VITE_WS_URL` with `wss`/`ws` fallback based on `window.location`.
+
+4) Security:
+   - Remove hardcoded API keys/tokens from source files.
+   - Add `.env` load in backend if not present; restrict CORS to dev origins only in dev.
+
+5) Dev experience:
+   - `npm i`
+   - `npm run dev` should start Vite and Uvicorn together.
+   - Add `README` instructions for local and Docker runs.
+
+6) Test endpoints:
+   - GET `/health`
+   - GET `/api/price/BTCUSDT`
+   - WebSocket `/ws/signals`
+
+7) Commit:
+   - `feat(dev): add vite env, ws client, compose, and scripts`
+   - Open a PR to `main`.
+
+Stop if any missing file paths are detected and show a diff plan instead of guessing.

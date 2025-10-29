@@ -52,20 +52,20 @@ const RealTimeSignalPositions: React.FC = () => {
   useEffect(() => {
     generateMockPositions();
     
-    // Real-time position updates every 2 seconds
+    // Real-time position updates every 10 seconds (reduced frequency)
     const positionInterval = setInterval(() => {
       updatePositions();
-    }, 2000);
+    }, 10000);
 
-    // Alert updates every 3 seconds
+    // Alert updates every 15 seconds (reduced frequency)
     const alertInterval = setInterval(() => {
       updateAlerts();
-    }, 3000);
+    }, 15000);
 
-    // PnL updates every 1 second
+    // PnL updates every 5 seconds (reduced frequency)
     const pnlInterval = setInterval(() => {
       updatePnL();
-    }, 1000);
+    }, 5000);
 
     return () => {
       clearInterval(positionInterval);
