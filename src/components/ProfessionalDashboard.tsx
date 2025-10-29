@@ -100,6 +100,7 @@ const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [apiHealthData, setApiHealthData] = useState<any>(null);
+  const [portfolioMetrics, setPortfolioMetrics] = useState<any>(null);
   const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({
     metrics: true,
     charts: true,
@@ -212,10 +213,27 @@ const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({
       await Promise.all([
         updateMarketData(),
         refreshSignals(),
-        loadChartData()
+        loadChartData(),
+        loadPortfolioMetrics()
       ]);
     } catch (error) {
       console.error('Error loading initial data:', error);
+    }
+  };
+
+  const loadPortfolioMetrics = async () => {
+    try {
+      if (api && api.trading && api.trading.getPortfolioSummary) {
+        const response = await api.trading.getPortfolioSummary();
+        setPortfolioMetrics(response);
+      } else {
+        // API not available - set to null instead of using fake data
+        console.warn('Portfolio metrics API not available');
+        setPortfolioMetrics(null);
+      }
+    } catch (error) {
+      console.error('Error loading portfolio metrics:', error);
+      setPortfolioMetrics(null);
     }
   };
 
@@ -225,19 +243,13 @@ const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({
       if (realData.length > 0) {
         setMarketData(realData as MarketData[]);
       } else {
-        const mockData: MarketData[] = [{
-          symbol: selectedSymbol,
-          price: 50000 + Math.random() * 10000,
-          change_24h: (Math.random() - 0.5) * 10,
-          volume: Math.random() * 1000000,
-          high_24h: 55000 + Math.random() * 5000,
-          low_24h: 45000 + Math.random() * 5000,
-          timestamp: new Date()
-        }];
-        setMarketData(mockData);
+        // No real data available - set empty array instead of generating fake data
+        setMarketData([]);
+        console.warn('No market data available from dataManager');
       }
     } catch (error) {
       console.error('Error updating market data:', error);
+      setMarketData([]);
     }
   };
 
@@ -265,26 +277,14 @@ const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({
       if (response.ok) {
         const data = await response.json();
         setApiHealthData(data);
+      } else {
+        // Backend returned error - set to null instead of fake data
+        setApiHealthData(null);
       }
     } catch (error) {
-      console.warn('API health check failed, using mock data:', error);
-      // Set mock API health data when backend is not available
-      setApiHealthData({
-        total_apis: 8,
-        healthy_apis: 6,
-        unhealthy_apis: 2,
-        overall_health: 75.0,
-        services: [
-          { name: 'Binance API', status: 'healthy' },
-          { name: 'KuCoin API', status: 'healthy' },
-          { name: 'Trading Engine', status: 'healthy' },
-          { name: 'WebSocket', status: 'healthy' },
-          { name: 'Database', status: 'healthy' },
-          { name: 'Risk Manager', status: 'healthy' },
-          { name: 'Sentiment API', status: 'unhealthy' },
-          { name: 'News API', status: 'unhealthy' }
-        ]
-      });
+      console.warn('API health check failed:', error);
+      // Backend not available - set to null instead of generating fake data
+      setApiHealthData(null);
     }
   };
 
@@ -307,44 +307,53 @@ const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({
     }));
   };
 
-  const mockMetrics = [
-    {
-      title: 'Portfolio Value',
-      value: '$125,750.50',
-      change: 2.31,
-      changeLabel: '24h',
-      icon: DollarSign,
-      color: 'success' as const,
-      trend: 'up' as const
-    },
-    {
-      title: 'Active Signals',
-      value: signals.length,
-      change: 12.5,
-      changeLabel: '1h',
-      icon: Zap,
-      color: 'primary' as const,
-      trend: 'up' as const
-    },
-    {
-      title: 'Win Rate',
-      value: '68.9%',
-      change: -2.1,
-      changeLabel: '7d',
-      icon: TrendingUp,
-      color: 'warning' as const,
-      trend: 'down' as const
-    },
-    {
-      title: 'Risk Score',
-      value: '6.8/10',
-      change: 0.5,
-      changeLabel: '1h',
-      icon: Shield,
-      color: 'info' as const,
-      trend: 'up' as const
-    }
-  ];
+  // Compute real metrics from backend data or show honest placeholders
+  const getMetrics = () => {
+    const hasPortfolioData = portfolioMetrics && portfolioMetrics.total_value !== undefined;
+
+    return [
+      {
+        title: 'Portfolio Value',
+        value: hasPortfolioData
+          ? `$${portfolioMetrics.total_value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          : '--',
+        change: hasPortfolioData ? portfolioMetrics.pnl_percentage : undefined,
+        changeLabel: '24h',
+        icon: DollarSign,
+        color: 'success' as const,
+        trend: (hasPortfolioData && portfolioMetrics.pnl_percentage > 0) ? 'up' as const : 'down' as const
+      },
+      {
+        title: 'Active Signals',
+        value: signals.length,
+        change: undefined, // Don't show fake change
+        changeLabel: 'live',
+        icon: Zap,
+        color: 'primary' as const,
+        trend: 'up' as const
+      },
+      {
+        title: 'Win Rate',
+        value: hasPortfolioData && portfolioMetrics.win_rate !== undefined
+          ? `${portfolioMetrics.win_rate.toFixed(1)}%`
+          : '--',
+        change: undefined, // Don't show fake change
+        changeLabel: 'all time',
+        icon: TrendingUp,
+        color: 'warning' as const,
+        trend: 'up' as const
+      },
+      {
+        title: 'Risk Score',
+        value: '--', // Risk score needs separate API endpoint
+        change: undefined,
+        changeLabel: 'current',
+        icon: Shield,
+        color: 'info' as const,
+        trend: 'up' as const
+      }
+    ];
+  };
 
   const CollapsibleSection = ({ title, icon: Icon, children, sectionKey }: any) => (
     <div className="modern-section">
@@ -402,7 +411,7 @@ const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({
           {/* Key Metrics */}
           <CollapsibleSection title="Key Metrics" icon={BarChart3} sectionKey="metrics">
             <div className="metrics-grid">
-              {mockMetrics.map((metric, index) => (
+              {getMetrics().map((metric, index) => (
                 <ProfessionalMetricCard
                   key={index}
                   title={metric.title}
