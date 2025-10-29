@@ -441,9 +441,9 @@ const EquityCurveChart: React.FC<EquityCurveChartProps> = ({ backtest }) => {
             <p>• High maximum drawdown suggests potential risk management issues</p>
           )}
           {backtest.metrics.sharpe_ratio > 1 ? (
-            <p>• Strong risk-adjusted returns (Sharpe ratio > 1)</p>
+            <p>• Strong risk-adjusted returns (Sharpe ratio &gt; 1)</p>
           ) : (
-            <p>• Moderate risk-adjusted returns (Sharpe ratio < 1)</p>
+            <p>• Moderate risk-adjusted returns (Sharpe ratio &lt; 1)</p>
           )}
           <p>• Hover over the chart to see detailed point information</p>
         </div>

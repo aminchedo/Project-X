@@ -19,8 +19,8 @@ import ArchitectureDesigner from './ArchitectureDesigner';
 import APIKeyManager from './APIKeyManager';
 import AlertsConfiguration from './AlertsConfiguration';
 import ThemeCustomization from './ThemeCustomization';
-import SecuritySettings from './SecuritySettings';
-import DatabaseSettings from './DatabaseSettings';
+// import SecuritySettings from './SecuritySettings'; // Component missing in Bolt export
+// import DatabaseSettings from './DatabaseSettings'; // Component missing in Bolt export
 
 interface SettingsConfig {
   neural_network: {
@@ -374,19 +374,15 @@ const SettingsPanel: React.FC = () => {
           )}
 
           {activeTab === 'security' && (
-            <SecuritySettings
-              config={config.security}
-              onUpdate={(newConfig) => updateConfig(['security'], newConfig)}
-            />
+            <div className="p-6 bg-gray-900 rounded-lg border border-gray-800">
+              <p className="text-gray-400">Security settings component not available in this build.</p>
+            </div>
           )}
 
           {activeTab === 'database' && (
-            <DatabaseSettings
-              onUpdate={(newConfig) => {
-                // Database settings might need special handling
-                console.log('Database config updated:', newConfig);
-              }}
-            />
+            <div className="p-6 bg-gray-900 rounded-lg border border-gray-800">
+              <p className="text-gray-400">Database settings component not available in this build.</p>
+            </div>
           )}
         </div>
       </div>
