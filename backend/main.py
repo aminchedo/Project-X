@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
 import asyncio
@@ -917,14 +917,18 @@ async def get_notification_settings():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.put("/api/notifications/settings")
-async def update_notification_settings(settings: dict):
-    """Update notification settings"""
-    try:
-        success = telegram_notifier.update_settings(settings)
-        
-        if success:
-            updated_settings = telegram_notifier.get_settings()
+@app.put("/ap        # Get current market prices from data manager
+        try:
+            current_prices = {}
+            for symbol in ['BTCUSDT', 'ETHUSDT', 'ADAUSDT']:
+                price_data = await data_manager.get_current_price(symbol)
+                if price_data and price_data.price:
+                    current_prices[symbol] = price_data.price
+                else:
+                    current_prices[symbol] = None
+        except Exception as e:
+            log_error("price_fetch_error", str(e))
+            return {"error": "Failed to fetch current prices"}   updated_settings = telegram_notifier.get_settings()
             return {
                 "status": "success",
                 "message": "Settings updated successfully",
@@ -1079,14 +1083,8 @@ async def get_monthly_performance():
 
 @app.post("/api/pnl/log-signal")
 async def log_signal(signal: dict):
-    """Log a trading signal for tracking"""
-    try:
-        signal_id = await trade_logger.log_signal(signal)
-        
-        return {
-            "status": "success",
-            "signal_id": signal_id,
-            "message": "Signal logged successfully",
+    """Log a trading si        # Return empty positions if no real data available
+        positions = []uccessfully",
             "timestamp": datetime.now()
         }
     except Exception as e:
@@ -1101,14 +1099,8 @@ async def log_trade(trade: dict, signal_id: Optional[str] = None):
         return {
             "status": "success",
             "trade_id": trade_id,
-            "message": "Trade logged successfully",
-            "timestamp": datetime.now()
-        }
-    except Exception as e:
-         raise HTTPException(status_code=500, detail=str(e))
-
-# Advanced Risk Management Endpoints
-@app.get("/api/risk/portfolio-var")
+            "message": "T        # Return empty existing positions if no real data available
+        existing_positions = []api/risk/portfolio-var")
 async def calculate_portfolio_var(confidence: float = 0.95):
     """Calculate portfolio Value at Risk"""
     try:
@@ -1118,21 +1110,14 @@ async def calculate_portfolio_var(confidence: float = 0.95):
             {'symbol': 'ETHUSDT', 'quantity': 2.0, 'entry_price': 2500}
         ]
         
-        var_analysis = await advanced_risk_manager.calculate_portfolio_var(positions, confidence)
-        
-        return {
-            "status": "success",
-            "data": var_analysis,
-            "timestamp": datetime.now()
+        var_analysis = await advanced_risk_manager.calculate_port        # Return empty portfolio data if no real data available
+        portfolio = {
+            'portfolio_value': 0,
+            'open_positions': []
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/risk/check-correlation")
-async def check_correlation_limits(new_position: dict):
-    """Check correlation limits for new position"""
-    try:
-        # Get existing positions (mock data)
+        
+        # Return empty current prices
+        current_prices = {}ng positions (mock data)
         existing_positions = [
             {'symbol': 'BTCUSDT', 'quantity': 0.1, 'entry_price': 45000},
             {'symbol': 'ETHUSDT', 'quantity': 2.0, 'entry_price': 2500}
@@ -1554,16 +1539,13 @@ async def get_multi_timeframe_analysis(symbol: str):
         }
     except Exception as e:
         log_error("multi_timeframe_analysis_error", str(e), {"symbol": symbol})
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Risk metrics endpoint
-@app.get("/api/risk/metrics")
-async def get_risk_metrics():
-    """Get comprehensive risk metrics"""
+        raise HT# Portfolio positions endpoint
+@app.get("/api/portfolio/positions")
+async def get_portfolio_positions():
+    """Get current portfolio positions"""
     try:
-        # Get basic risk status from existing risk manager
-        basic_risk = risk_manager.get_current_status()
-        
+        # Return empty positions if no real data available
+        positions = []  
         # Calculate additional metrics
         portfolio_var = 0.15  # Placeholder - calculate from positions
         sharpe_ratio = 1.85   # Placeholder - calculate from returns
@@ -1662,13 +1644,8 @@ async def generate_strategy(request: dict):
         log_api_call("/api/analytics/generate-strategy", "POST", 0.25, 200)
         
         return strategy
-        
-    except Exception as e:
-        log_error("strategy_generation_error", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/analytics/market-depth/{symbol}")
-async def get_market_depth(symbol: str):
+        # Return empty correlation data if no real data available
+        correlation_matrix = np.eye(len(symbols))  # Identity matrix as neutral baselinet_depth(symbol: str):
     """Get real-time market depth data"""
     try:
         from backend.analytics.realtime_stream import stream_manager
@@ -1866,11 +1843,12 @@ async def websocket_market(websocket: WebSocket):
                 # Send REAL signal from scoring engine every 10 iterations (~20 seconds)
                 signal_counter += 1
                 if signal_counter >= 10 and scoring_engine is not None:
-                    try:
-                        # Get real signal from scoring engine
-                        ohlcv_data = await data_manager.get_ohlcv_data(symbol, "15m", 100)
-                        if ohlcv_data:
-                            result = await scoring_engine.analyze(symbol, ohlcv_data)
+                    try:        # Get real news data from external sources
+        news_texts = []
+        try:
+            # This would fetch real news from external APIs
+            # For now, return empty to avoid fake data
+            pass         result = await scoring_engine.analyze(symbol, ohlcv_data)
                             if result and 'signal' in result:
                                 signal_data = {
                                     "type": "signal",
@@ -1908,16 +1886,12 @@ async def analyze_sentiment(symbol: str):
         news_texts = [
             f"{symbol} shows strong performance amid market volatility",
             f"Analysts upgrade {symbol} price target following earnings",
-            f"Market uncertainty affects {symbol} trading volume"
-        ]
-        
-        sentiment_analysis = await huggingface_ai.analyze_market_sentiment(news_texts)
-        log_api_call(f"/api/ai/sentiment/{symbol}", "GET", 0.25, 200)
-        
-        return sentiment_analysis
-        
-    except Exception as e:
-        log_error("sentiment_analysis_error", str(e))
+            f"Market uncertainty affects                'change_24h': None,  # No real data available
+                'volatility': None   # No real data available  log_api_call(f"/a        else:
+            # Return null data if not available
+            market_data = {
+                'symbol': symbol,
+                'price': None,sentiment_analysis_error", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/ai/market-analysis")
@@ -2210,34 +2184,12 @@ async def get_phase3_status():
             "integration_status": "complete",
             "api_endpoints": [
                 "/api/analytics/phase3/comprehensive/{symbol}",
-                "/api/analytics/phase3/harmonic/{symbol}",
-                "/api/analytics/phase3/elliott/{symbol}",
-                "/api/analytics/phase3/smc/{symbol}",
-                "/api/analytics/phase3/status"
-            ],
-            "timestamp": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        log_error("phase3_status_error", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
-
-# DISABLED - Real-time streaming requires optional dependencies (talib, tensorflow, etc.)
-# Startup event to initialize real-time streaming
-# @app.on_event("startup")
-# async def startup_event():
-#     """Initialize services on startup"""
-#     try:
-#         from backend.analytics.realtime_stream import stream_manager
-#         from backend.analytics.huggingface_ai import huggingface_ai
-#         
-#         # Initialize the stream manager
-#         await stream_manager.initialize()
-#         
-#         # Initialize Hugging Face AI models
-#         await huggingface_ai.initialize_models()
-#         
-#         # Start the WebSocket server in background
+                "/api/analytics/phas    # Use real data aggregator and scoring engine
+    from backend.scoring.engine import DynamicScoringEngine
+    from backend.scoring.scanner import MultiTimeframeScanner
+    
+    # Initialize real services - will be available when real data sources are configured
+    mtf_scanner = Noneground
 #         import asyncio
 #         asyncio.create_task(stream_manager.start_server('localhost', 8765))
 #         
@@ -2448,14 +2400,14 @@ async def calculate_position_size(request: dict):
 
 @app.post("/api/risk/calculate-stop-loss")
 async def calculate_stop_loss(request: dict):
-    """Calculate stop loss using ATR and structure levels"""
-    try:
-        if not enhanced_risk_manager:
-            raise HTTPException(status_code=500, detail="Risk manager not available")
+        # Return empty portfolio data if no real data available
+        portfolio = {
+            'portfolio_value': 0,
+            'open_positions': []
+        }
         
-        entry_price = request.get('entry_price')
-        direction = request.get('direction')
-        atr = request.get('atr', 0.01)
+        # Return empty current prices
+        current_prices = {}1)
         structure_levels = request.get('structure_levels')
         
         if not all([entry_price, direction]):
