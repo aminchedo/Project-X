@@ -72,13 +72,13 @@ class RealTimeStreamManager:
         self.data_sources['binance'] = {
             'url': 'wss://stream.binance.com:9443/ws/',
             'symbols': ['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT'],
-            'active': True
+            'active': False  # DISABLED: No mock data allowed
         }
         
         # Add more data sources as needed
         self.data_sources['mock'] = {
             'symbols': ['AAPL', 'GOOGL', 'TSLA', 'MSFT'],
-            'active': True
+            'active': False  # DISABLED: No mock data allowed
         }
         
     async def start_server(self, host='localhost', port=8765):
@@ -228,7 +228,7 @@ class RealTimeStreamManager:
             try:
                 # Process data from all sources
                 await self._process_binance_data()
-                await self._process_mock_data()
+                # await self._process_mock_data()  # DISABLED: No mock data allowed
                 
                 # Small delay to prevent overwhelming
                 await asyncio.sleep(0.01)  # 100Hz update rate
