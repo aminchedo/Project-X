@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Scatter, Bar } from 'react-chartjs-2';
 import { api } from '../services/api';
-import { realtimeTradingWs } from '../services/websocket';
+import { realtimeWs } from '../services/websocket';
 import {
   Waves,
   TrendingUp,
@@ -67,7 +67,7 @@ const WhaleMovementsChart: React.FC<WhaleMovementsChartProps> = ({
     const interval = setInterval(fetchWhaleMovements, 60000); // Every 60 seconds (reduced frequency)
     return () => {
       clearInterval(interval);
-      realtimeTradingWs.disconnect();
+      realtimeWs.disconnect();
     };
   }, [symbol, timeframe]);
 
@@ -86,13 +86,13 @@ const WhaleMovementsChart: React.FC<WhaleMovementsChartProps> = ({
   };
 
   const connectWebSocket = () => {
-    realtimeTradingWs.connect();
+    realtimeWs.connect();
     
-    realtimeTradingWs.onStateChange((state) => {
+    realtimeWs.onStateChange((state) => {
       setIsConnected(state === 'connected');
     });
 
-    realtimeTradingWs.onMessage((event) => {
+    realtimeWs.onMessage((event) => {
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'whale_movement' && message.data.symbol === symbol) {

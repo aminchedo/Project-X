@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../services/api';
-import { realtimeTradingWs } from '../services/websocket';
+import { realtimeWs } from '../services/websocket';
 import { playSound } from '../utils/sound';
 import { Search, Play, Pause, RefreshCw, AlertCircle } from 'lucide-react';
 import ResultsTable from './scanner/ResultsTable';
@@ -28,13 +28,13 @@ const MarketScanner: React.FC = () => {
 
   useEffect(() => {
     connectWebSocket();
-    return () => realtimeTradingWs.disconnect();
+    return () => realtimeWs.disconnect();
   }, []);
 
   const connectWebSocket = () => {
-    realtimeTradingWs.connect();
-    realtimeTradingWs.onStateChange((state) => setIsConnected(state === 'connected'));
-    realtimeTradingWs.onMessage((event) => {
+    realtimeWs.connect();
+    realtimeWs.onStateChange((state) => setIsConnected(state === 'connected'));
+    realtimeWs.onMessage((event) => {
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'scan_result') {

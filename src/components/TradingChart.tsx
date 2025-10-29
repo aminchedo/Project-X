@@ -115,7 +115,7 @@ const TradingChart: React.FC<TradingChartProps> = ({
 
   // DISABLED: WebSocket is now managed by LiveDataProvider
   // const connectWebSocket = () => {
-  //   realtimeTradingWs.connect();
+  //   realtimeWs.connect();
   //   ...
   // };
 

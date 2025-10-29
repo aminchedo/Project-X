@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../services/api';
-import { realtimeTradingWs } from '../services/websocket';
+import { realtimeWs } from '../services/websocket';
 import {
   BookOpen,
   TrendingUp,
@@ -51,7 +51,7 @@ const OrderBook: React.FC<OrderBookProps> = ({
     const interval = setInterval(fetchOrderBook, 5000);
     return () => {
       clearInterval(interval);
-      realtimeTradingWs.disconnect();
+      realtimeWs.disconnect();
     };
   }, [symbol]);
 
@@ -70,13 +70,13 @@ const OrderBook: React.FC<OrderBookProps> = ({
   };
 
   const connectWebSocket = () => {
-    realtimeTradingWs.connect();
+    realtimeWs.connect();
     
-    realtimeTradingWs.onStateChange((state) => {
+    realtimeWs.onStateChange((state) => {
       setIsConnected(state === 'connected');
     });
 
-    realtimeTradingWs.onMessage((event) => {
+    realtimeWs.onMessage((event) => {
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'orderbook' && message.symbol === symbol) {

@@ -51,7 +51,7 @@ import { TradingSignal, MarketData, OHLCVData } from '../types';
 import { tradingEngine } from '../services/tradingEngine';
 import { binanceApi } from '../services/binanceApi';
 import { api } from '../services/api';
-import { realtimeTradingWs } from '../services/websocket';
+import { realtimeWs } from '../services/websocket';
 import { realApiService } from '../services/RealApiService';
 import { dataManager } from '../services/DataManager';
 import { NewsWidget } from './Widgets/NewsWidget';
@@ -127,14 +127,14 @@ const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({
       clearInterval(signalInterval);
       clearInterval(healthInterval);
       clearInterval(apiHealthInterval);
-      realtimeTradingWs.disconnect();
+      realtimeWs.disconnect();
     };
   }, []);
 
   const setupWebSocket = () => {
     if (isBackendConnected) {
-      realtimeTradingWs.connect();
-      realtimeTradingWs.onMessage((event) => {
+      realtimeWs.connect();
+      realtimeWs.onMessage((event) => {
         try {
           const data = JSON.parse(event.data);
           handleWebSocketMessage(data);
@@ -142,7 +142,7 @@ const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({
           console.error('Error parsing WebSocket message:', error);
         }
       });
-      realtimeTradingWs.subscribeToMultipleSymbols(symbols);
+      realtimeWs.subscribeToMultipleSymbols(symbols);
     }
   };
 

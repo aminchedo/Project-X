@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../services/api';
-import { realtimeTradingWs } from '../services/websocket';
+import { realtimeWs } from '../services/websocket';
 import { playSound } from '../utils/sound';
 import {
   Zap,
@@ -52,7 +52,7 @@ const SignalsList: React.FC<SignalsListProps> = ({ onSignalClick }) => {
     const interval = setInterval(fetchSignals, 30000);
     return () => {
       clearInterval(interval);
-      realtimeTradingWs.disconnect();
+      realtimeWs.disconnect();
     };
   }, [statusFilter]);
 
@@ -71,13 +71,13 @@ const SignalsList: React.FC<SignalsListProps> = ({ onSignalClick }) => {
   };
 
   const connectWebSocket = () => {
-    realtimeTradingWs.connect();
+    realtimeWs.connect();
     
-    realtimeTradingWs.onStateChange((state) => {
+    realtimeWs.onStateChange((state) => {
       setIsConnected(state === 'connected');
     });
 
-    realtimeTradingWs.onMessage(async (event) => {
+    realtimeWs.onMessage(async (event) => {
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'new_signal') {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Line } from 'react-chartjs-2';
-import { realtimeTradingWs } from '../services/websocket';
+import { realtimeWs } from '../services/websocket';
 import { api } from '../services/api';
 import {
   Activity,
@@ -69,7 +69,7 @@ const RealTimeChart: React.FC<RealTimeChartProps> = ({
     connectWebSocket();
 
     return () => {
-      realtimeTradingWs.disconnect();
+      realtimeWs.disconnect();
     };
   }, [symbol]);
 
@@ -100,13 +100,13 @@ const RealTimeChart: React.FC<RealTimeChartProps> = ({
   };
 
   const connectWebSocket = () => {
-    realtimeTradingWs.connect();
+    realtimeWs.connect();
     
-    realtimeTradingWs.onStateChange((state) => {
+    realtimeWs.onStateChange((state) => {
       setIsConnected(state === 'connected');
     });
 
-    realtimeTradingWs.onMessage((event) => {
+    realtimeWs.onMessage((event) => {
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'price' && message.symbol === symbol) {

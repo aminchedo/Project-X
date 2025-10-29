@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Wifi, WifiOff, RefreshCw } from 'lucide-react';
-import { realtimeTradingWs } from '../services/websocket';
+import { realtimeWs } from '../services/websocket';
 
 const ConnectionStatus: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
@@ -9,7 +9,7 @@ const ConnectionStatus: React.FC = () => {
   const [reconnecting, setReconnecting] = useState(false);
 
   useEffect(() => {
-    realtimeTradingWs.onStateChange((state) => {
+    realtimeWs.onStateChange((state) => {
       const connected = state === 'connected';
       setIsConnected(connected);
       setShowBanner(!connected);
@@ -17,13 +17,13 @@ const ConnectionStatus: React.FC = () => {
     });
 
     return () => {
-      realtimeTradingWs.disconnect();
+      realtimeWs.disconnect();
     };
   }, []);
 
   const handleReconnect = () => {
     setReconnecting(true);
-    realtimeTradingWs.connect();
+    realtimeWs.connect();
   };
 
   return (
