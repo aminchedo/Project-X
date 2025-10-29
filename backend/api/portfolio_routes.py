@@ -5,7 +5,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List
 from datetime import datetime
-import random
 
 router = APIRouter()
 
@@ -56,45 +55,31 @@ class ScanResult(BaseModel):
 async def get_portfolio_status():
     """
     Get current portfolio status including positions and exposure.
-    
-    Returns realistic demo data for now.
-    Replace with actual database queries in production.
+
+    Returns empty portfolio when no real trades exist.
+    Frontend should handle null/empty gracefully.
     """
+    # TODO: Query from database when trade execution is implemented
+    # For now, return empty portfolio (honest state)
     return PortfolioStatus(
-        positions=[
-            Position(
-                symbol="BTCUSDT",
-                size=0.5,
-                entry=68000.0,
-                pnl=120.5 + random.uniform(-50, 50),
-                leverage=5
-            ),
-            Position(
-                symbol="ETHUSDT",
-                size=2.0,
-                entry=3500.0,
-                pnl=45.2 + random.uniform(-20, 20),
-                leverage=3
-            ),
-        ],
-        exposureUsd=17000.0 + random.uniform(-1000, 1000)
+        positions=[],
+        exposureUsd=0.0
     )
 
 @router.get("/api/portfolio/pnl", response_model=PnLSummary)
 async def get_portfolio_pnl():
     """
     Get PnL summary: realized, unrealized, and total.
-    
-    Returns realistic demo data for now.
-    Replace with actual calculations in production.
+
+    Returns zero PnL when no real trades exist.
+    Frontend should handle zero values gracefully.
     """
-    realized = 2500.0 + random.uniform(-100, 100)
-    unrealized = 165.7 + random.uniform(-50, 50)
-    
+    # TODO: Calculate from real trade history in database
+    # For now, return zero (honest state)
     return PnLSummary(
-        realized=round(realized, 2),
-        unrealized=round(unrealized, 2),
-        total=round(realized + unrealized, 2)
+        realized=0.0,
+        unrealized=0.0,
+        total=0.0
     )
 
 # ==================== Risk Endpoints ====================
@@ -103,14 +88,16 @@ async def get_portfolio_pnl():
 async def get_risk_live():
     """
     Get live risk snapshot including liquidation risk and margin usage.
-    
-    Returns realistic demo data for now.
-    Replace with actual risk calculations in production.
+
+    Returns zero risk when no positions exist.
+    Frontend should handle zero/null values gracefully.
     """
+    # TODO: Calculate from actual position data when available
+    # For now, return zero risk (honest state - no positions = no risk)
     return RiskSnapshot(
-        liquidationRisk=round(12.3 + random.uniform(-2, 2), 1),
-        marginUsage=round(45.8 + random.uniform(-5, 5), 1),
-        notes="within acceptable risk parameters"
+        liquidationRisk=0.0,
+        marginUsage=0.0,
+        notes="No active positions"
     )
 
 # ==================== Signal Endpoints ====================
@@ -118,27 +105,23 @@ async def get_risk_live():
 @router.get("/api/signals", response_model=TradingSignal)
 async def get_latest_signal():
     """
-    Get the latest trading signal.
-    
-    Returns realistic demo data for now.
-    Replace with actual signal generation in production.
+    Get the latest trading signal from scoring engine.
+
+    Returns signal from scoring engine if available, else returns None/error.
+    Frontend receives signals via WebSocket primarily.
     """
-    symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT"]
-    timeframes = ["15m", "1h", "4h"]
-    directions = ["LONG", "SHORT"]
-    
-    return TradingSignal(
-        symbol=random.choice(symbols),
-        timeframe=random.choice(timeframes),
-        direction=random.choice(directions),
-        confidence=random.randint(65, 95)
+    # TODO: Integrate with scoring engine or return last stored signal from DB
+    # For now, clients should rely on WebSocket /ws/market for signals
+    raise HTTPException(
+        status_code=501,
+        detail="Use WebSocket /ws/market for real-time signals. REST endpoint not yet implemented."
     )
 
 @router.post("/api/signals/scan", response_model=List[ScanResult])
 async def scan_signals(request: ScanRequest):
     """
-    Run a market scan and return matching signals.
-    
+    Run a market scan and return matching signals using scoring engine.
+
     Request body:
     {
         "symbols": ["BTCUSDT", "ETHUSDT"],
@@ -146,27 +129,13 @@ async def scan_signals(request: ScanRequest):
         "minScore": 60,
         "signalTypes": ["LONG", "SHORT"]
     }
-    
-    Returns realistic demo data for now.
-    Replace with actual scanner in production.
+
+    Returns real signals from scoring engine or empty list if not available.
     """
-    results = []
-    
-    for symbol in request.symbols[:5]:  # Limit to 5 symbols
-        for timeframe in request.timeframes[:3]:  # Limit to 3 timeframes
-            score = random.randint(request.minScore, 95)
-            signal_type = random.choice(request.signalTypes)
-            
-            # Only return signals above minScore
-            if score >= request.minScore:
-                results.append(ScanResult(
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    type=signal_type,
-                    score=score
-                ))
-    
-    return results
+    # TODO: Use scanner.scan() when fully integrated
+    # For now, return empty results (honest state)
+    # Client should use WebSocket /ws/market for real-time signals
+    return []
 
 # ==================== Market Data Endpoints ====================
 
@@ -181,43 +150,40 @@ class Candle(BaseModel):
 @router.get("/market/candles", response_model=List[Candle])
 async def get_candles(symbol: str, timeframe: str, limit: int = 100):
     """
-    Get OHLCV candles for charting.
-    
+    Get REAL OHLCV candles from Binance for charting.
+
     Query params:
     - symbol: e.g. BTCUSDT
     - timeframe: e.g. 15m, 1h, 4h
     - limit: number of candles (default 100)
-    
-    Returns realistic demo data for now.
-    Replace with actual market data API in production.
+
+    Returns real market data from Binance.
     """
-    candles = []
-    base_price = 68000.0 if symbol == "BTCUSDT" else 3500.0
-    
-    # Generate realistic-looking candles
-    current_time = int(datetime.now().timestamp() * 1000)
-    interval_ms = 900000  # 15 minutes in milliseconds
-    
-    for i in range(limit):
-        timestamp = current_time - (limit - i) * interval_ms
-        
-        # Random walk for realistic price movement
-        price = base_price + random.uniform(-200, 200)
-        open_price = price
-        high_price = open_price + random.uniform(0, 100)
-        low_price = open_price - random.uniform(0, 100)
-        close_price = open_price + random.uniform(-50, 50)
-        volume = random.uniform(80, 150)
-        
-        candles.append(Candle(
-            t=timestamp,
-            o=round(open_price, 2),
-            h=round(high_price, 2),
-            l=round(low_price, 2),
-            c=round(close_price, 2),
-            v=round(volume, 2)
-        ))
-        
-        base_price = close_price  # Next candle starts where this one ends
-    
-    return candles
+    try:
+        # Get real data from data_manager
+        from backend.data.data_manager import data_manager
+
+        ohlcv_data = await data_manager.get_ohlcv_data(symbol, timeframe, limit)
+
+        if not ohlcv_data:
+            return []
+
+        # Convert Binance format to API format
+        candles = []
+        for bar in ohlcv_data:
+            candles.append(Candle(
+                t=int(bar[0]),  # timestamp
+                o=float(bar[1]),  # open
+                h=float(bar[2]),  # high
+                l=float(bar[3]),  # low
+                c=float(bar[4]),  # close
+                v=float(bar[5])   # volume
+            ))
+
+        return candles
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch candles: {str(e)}"
+        )

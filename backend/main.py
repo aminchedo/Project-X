@@ -36,21 +36,21 @@ from backend.analytics.phase3_integration import phase3_analytics_engine
 # Import Phase 7, 8, 9 components
 # Note: websocket module doesn't exist yet, using local ConnectionManager instead
 # from backend.api.routes import router as enhanced_router
-# from backend.api.models import WeightConfig
-# from backend.scoring.engine import DynamicScoringEngine
-# from backend.scoring.scanner import MultiTimeframeScanner
+from backend.api.models import WeightConfig
+from backend.scoring.engine import DynamicScoringEngine
+from backend.scoring.scanner import MultiTimeframeScanner
 # from backend.backtesting.engine import BacktestEngine
 # from backend.websocket.manager import manager as ws_manager
 # from backend.websocket.live_scanner import initialize_live_scanner
 
 # Import Phase 4 scoring system
-# from backend.scoring.api import router as scoring_router
+from backend.scoring.api import router as scoring_router
 
 # Import crypto data aggregation router
-# from backend.routers.data import router as data_router
+from backend.routers.data import router as data_router
 
 # Import AI extras router (goal conditioning + calibration)
-# from backend.routers.ai_extras import router as extras_router
+from backend.routers.ai_extras import router as extras_router
 
 # Import database components
 from backend.database.connection import get_db, init_db
@@ -65,48 +65,56 @@ app = FastAPI(title="HTS Trading System", version="1.0.0")
 # Initialize security
 security = HTTPBearer()
 
+# Global variables for scoring engine and scanner
+scoring_engine = None
+scanner = None
+
 # Initialize database on startup
 @app.on_event("startup")
 async def startup_event():
     init_db()
     app_logger.log_system_event("startup", "HTS Trading System started")
-    
-    # Initialize Phase 7, 8, 9 components - DISABLED (modules not available)
-    # try:
-    #     # Initialize detectors and scoring engine
-    #     from detectors.harmonic import HarmonicDetector
-    #     from detectors.elliott import ElliottWaveDetector
-    #     from detectors.smc import SMCDetector
-    #     from detectors.fibonacci import FibonacciDetector
-    #     from detectors.price_action import PriceActionDetector
-    #     from detectors.sar import SARDetector
-    #     from detectors.sentiment import SentimentDetector
-    #     from detectors.news import NewsDetector
-    #     from detectors.whales import WhaleDetector
-    #     
-    #     detectors = {
-    #         "harmonic": HarmonicDetector(),
-    #         "elliott": ElliottWaveDetector(),
-    #         "smc": SMCDetector(),
-    #         "fibonacci": FibonacciDetector(),
-    #         "price_action": PriceActionDetector(),
-    #         "sar": SARDetector(),
-    #         "sentiment": SentimentDetector(),
-    #         "news": NewsDetector(),
-    #         "whales": WhaleDetector()
-    #     }
-    #     
-    #     default_weights = WeightConfig()
-    #     scoring_engine = DynamicScoringEngine(detectors, default_weights)
-    #     scanner = MultiTimeframeScanner(data_manager, scoring_engine, default_weights)
-    #     
-    #     # Initialize live scanner
-    #     await initialize_live_scanner(scoring_engine, scanner)
-    #     
-    #     app_logger.log_system_event("startup", "Enhanced trading system components initialized")
-    #     
-    # except Exception as e:
-    #     app_logger.log_system_event("startup_error", f"Failed to initialize enhanced components: {e}")
+
+    # Initialize Phase 7, 8, 9 components
+    try:
+        # Initialize detectors and scoring engine
+        from backend.detectors.harmonic import HarmonicDetector
+        from backend.detectors.elliott import ElliottWaveDetector
+        from backend.detectors.smc import SMCDetector
+        from backend.detectors.fibonacci import FibonacciDetector
+        from backend.detectors.price_action import PriceActionDetector
+        from backend.detectors.sar import SARDetector
+        from backend.detectors.sentiment import SentimentDetector
+        from backend.detectors.news import NewsDetector
+        from backend.detectors.whales import WhaleDetector
+
+        detectors = {
+            "harmonic": HarmonicDetector(),
+            "elliott": ElliottWaveDetector(),
+            "smc": SMCDetector(),
+            "fibonacci": FibonacciDetector(),
+            "price_action": PriceActionDetector(),
+            "sar": SARDetector(),
+            "sentiment": SentimentDetector(),
+            "news": NewsDetector(),
+            "whales": WhaleDetector()
+        }
+
+        default_weights = WeightConfig()
+        global scoring_engine, scanner
+        scoring_engine = DynamicScoringEngine(detectors, default_weights)
+        scanner = MultiTimeframeScanner(data_manager, scoring_engine, default_weights)
+
+        # Initialize live scanner (if module available)
+        # await initialize_live_scanner(scoring_engine, scanner)
+
+        app_logger.log_system_event("startup", "Enhanced trading system components initialized successfully")
+
+    except Exception as e:
+        app_logger.log_system_event("startup_error", f"Failed to initialize enhanced components: {e}")
+        # Continue without scoring engine - endpoints will return errors
+        scoring_engine = None
+        scanner = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -130,10 +138,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# app.include_router(extras_router)
 # Include routers
-# app.include_router(scoring_router)
-# app.include_router(data_router)
+app.include_router(extras_router, prefix="/api", tags=["AI Extras"])
+app.include_router(scoring_router, prefix="/api", tags=["Scoring"])
+app.include_router(data_router, prefix="/api", tags=["Data"])
 
 # Include portfolio/risk/signal routes (required by frontend)
 from backend.api.portfolio_routes import router as portfolio_router
@@ -1816,47 +1824,70 @@ async def websocket_market(websocket: WebSocket):
     
     await manager.connect(websocket)
     app_logger.log_system_event("websocket_connect", "Client connected to /ws/market")
-    
+
     try:
-        base_price = 68000.0
-        
+        symbol = "BTCUSDT"
+        signal_counter = 0
+
         while True:
-            # Simulate realistic price movement
-            price_change = random.uniform(-50, 50)
-            base_price += price_change
-            
-            # Send ticker frame (EXACT format as required)
-            ticker_data = {
-                "type": "ticker",
-                "symbol": "BTCUSDT",
-                "bid": round(base_price - random.uniform(5, 15), 2),
-                "ask": round(base_price + random.uniform(5, 15), 2),
-                "last": round(base_price, 2)
-            }
-            await websocket.send_json(ticker_data)
-            
-            await asyncio.sleep(0.5)
-            
-            # Send orderbook frame (EXACT format as required)
-            orderbook_data = {
-                "type": "orderbook",
-                "bids": [[str(round(base_price - i * 10, 2)), str(round(random.uniform(0.1, 2), 3))] for i in range(1, 11)],
-                "asks": [[str(round(base_price + i * 10, 2)), str(round(random.uniform(0.1, 2), 3))] for i in range(1, 11)]
-            }
-            await websocket.send_json(orderbook_data)
-            
-            await asyncio.sleep(0.5)
-            
-            # Send signal frame (EXACT format as required)
-            if random.random() < 0.2:  # 20% chance each iteration
-                signal_data = {
-                    "type": "signal",
-                    "symbol": "BTCUSDT",
-                    "timeframe": random.choice(["15m", "1h", "4h"]),
-                    "direction": random.choice(["LONG", "SHORT"]),
-                    "confidence": random.randint(65, 95)
-                }
-                await websocket.send_json(signal_data)
+            try:
+                # Get REAL ticker data from Binance via data_manager
+                market_data = await data_manager.get_market_data(symbol)
+
+                if market_data:
+                    # Send ticker frame with REAL data
+                    ticker_data = {
+                        "type": "ticker",
+                        "symbol": symbol,
+                        "bid": float(market_data.get("bidPrice", 0)),
+                        "ask": float(market_data.get("askPrice", 0)),
+                        "last": float(market_data.get("lastPrice", 0))
+                    }
+                    await websocket.send_json(ticker_data)
+
+                await asyncio.sleep(1)
+
+                # Get REAL orderbook from Binance
+                try:
+                    orderbook = await binance_client.get_orderbook(symbol, limit=10)
+                    if orderbook and 'bids' in orderbook and 'asks' in orderbook:
+                        # Send orderbook frame with REAL data
+                        orderbook_data = {
+                            "type": "orderbook",
+                            "bids": [[str(price), str(qty)] for price, qty in orderbook['bids']],
+                            "asks": [[str(price), str(qty)] for price, qty in orderbook['asks']]
+                        }
+                        await websocket.send_json(orderbook_data)
+                except Exception as ob_error:
+                    app_logger.log_system_event("ws_orderbook_error", f"Orderbook fetch failed: {ob_error}")
+
+                await asyncio.sleep(1)
+
+                # Send REAL signal from scoring engine every 10 iterations (~20 seconds)
+                signal_counter += 1
+                if signal_counter >= 10 and scoring_engine is not None:
+                    try:
+                        # Get real signal from scoring engine
+                        ohlcv_data = await data_manager.get_ohlcv_data(symbol, "15m", 100)
+                        if ohlcv_data:
+                            result = await scoring_engine.analyze(symbol, ohlcv_data)
+                            if result and 'signal' in result:
+                                signal_data = {
+                                    "type": "signal",
+                                    "symbol": symbol,
+                                    "timeframe": result.get("timeframe", "15m"),
+                                    "direction": result['signal'],
+                                    "confidence": int(result.get("confidence", 0) * 100)
+                                }
+                                await websocket.send_json(signal_data)
+                                signal_counter = 0
+                    except Exception as sig_error:
+                        app_logger.log_system_event("ws_signal_error", f"Signal generation failed: {sig_error}")
+                        signal_counter = 0
+
+            except Exception as loop_error:
+                app_logger.log_system_event("ws_loop_error", f"WebSocket loop error: {loop_error}")
+                await asyncio.sleep(2)  # Wait before retry
             
     except WebSocketDisconnect:
         manager.disconnect(websocket)
