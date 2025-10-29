@@ -1,46 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Activity, 
-  Target, 
-  Clock, 
+import {
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  Target,
+  Clock,
   DollarSign,
   BarChart3,
   AlertTriangle,
   CheckCircle,
   XCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  AlertCircle
 } from 'lucide-react';
-
-interface SignalPosition {
-  id: string;
-  symbol: string;
-  side: 'long' | 'short';
-  entryPrice: number;
-  currentPrice: number;
-  quantity: number;
-  unrealizedPnl: number;
-  unrealizedPnlPercent: number;
-  timestamp: number;
-  confidence: number;
-  status: 'active' | 'closed' | 'pending';
-  stopLoss?: number;
-  takeProfit?: number;
-  riskScore: number;
-}
-
-interface SignalAlert {
-  id: string;
-  symbol: string;
-  type: 'entry' | 'exit' | 'stop_loss' | 'take_profit';
-  message: string;
-  timestamp: number;
-  severity: 'low' | 'medium' | 'high';
-  price: number;
-  side: 'long' | 'short';
-}
+import { fetchSignalPositions, SignalPosition, SignalAlert } from '../services/liveDataApi';
 
 const RealTimeSignalPositions: React.FC = () => {
   const [positions, setPositions] = useState<SignalPosition[]>([]);
@@ -48,169 +22,56 @@ const RealTimeSignalPositions: React.FC = () => {
   const [totalPnl, setTotalPnl] = useState<number>(0);
   const [activePositions, setActivePositions] = useState<number>(0);
   const [showClosed, setShowClosed] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [winRate, setWinRate] = useState<number | null>(null);
+  const [avgRiskScore, setAvgRiskScore] = useState<number | null>(null);
 
   useEffect(() => {
-    generateMockPositions();
-    
-    // Real-time position updates every 10 seconds (reduced frequency)
-    const positionInterval = setInterval(() => {
-      updatePositions();
-    }, 10000);
+    // Load real positions data
+    const loadPositions = async () => {
+      setIsLoading(true);
+      setError(null);
 
-    // Alert updates every 15 seconds (reduced frequency)
-    const alertInterval = setInterval(() => {
-      updateAlerts();
-    }, 15000);
+      try {
+        const data = await fetchSignalPositions();
 
-    // PnL updates every 5 seconds (reduced frequency)
-    const pnlInterval = setInterval(() => {
-      updatePnL();
-    }, 5000);
-
-    return () => {
-      clearInterval(positionInterval);
-      clearInterval(alertInterval);
-      clearInterval(pnlInterval);
+        if (!data || data.positions.length === 0) {
+          setError('No active positions');
+          setPositions([]);
+          setAlerts([]);
+          setTotalPnl(0);
+          setActivePositions(0);
+          setWinRate(null);
+          setAvgRiskScore(null);
+        } else {
+          setPositions(data.positions);
+          setAlerts(data.alerts);
+          setTotalPnl(data.totalPnl);
+          setActivePositions(data.activeCount);
+          setWinRate(data.winRate ?? null);
+          setAvgRiskScore(data.avgRiskScore ?? null);
+        }
+      } catch (err) {
+        console.error('Failed to load signal positions:', err);
+        setError('Failed to load positions');
+        setPositions([]);
+        setAlerts([]);
+        setTotalPnl(0);
+        setActivePositions(0);
+      } finally {
+        setIsLoading(false);
+      }
     };
+
+    loadPositions();
+
+    // Refresh every 30 seconds
+    const intervalId = setInterval(loadPositions, 30000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
-  const generateMockPositions = () => {
-    const mockPositions: SignalPosition[] = [
-      {
-        id: '1',
-        symbol: 'BTCUSDT',
-        side: 'long',
-        entryPrice: 43250.50,
-        currentPrice: 43800.25,
-        quantity: 0.5,
-        unrealizedPnl: 274.88,
-        unrealizedPnlPercent: 1.27,
-        timestamp: Date.now() - 3600000,
-        confidence: 0.85,
-        status: 'active',
-        stopLoss: 42000,
-        takeProfit: 45000,
-        riskScore: 6.5
-      },
-      {
-        id: '2',
-        symbol: 'ETHUSDT',
-        side: 'short',
-        entryPrice: 2650.75,
-        currentPrice: 2620.30,
-        quantity: 2.0,
-        unrealizedPnl: 60.90,
-        unrealizedPnlPercent: 1.15,
-        timestamp: Date.now() - 7200000,
-        confidence: 0.78,
-        status: 'active',
-        stopLoss: 2700,
-        takeProfit: 2550,
-        riskScore: 4.2
-      },
-      {
-        id: '3',
-        symbol: 'SOLUSDT',
-        side: 'long',
-        entryPrice: 98.45,
-        currentPrice: 95.20,
-        quantity: 10.0,
-        unrealizedPnl: -32.50,
-        unrealizedPnlPercent: -3.30,
-        timestamp: Date.now() - 1800000,
-        confidence: 0.72,
-        status: 'active',
-        stopLoss: 92.00,
-        takeProfit: 105.00,
-        riskScore: 7.8
-      },
-      {
-        id: '4',
-        symbol: 'ADAUSDT',
-        side: 'long',
-        entryPrice: 0.4850,
-        currentPrice: 0.4920,
-        quantity: 1000.0,
-        unrealizedPnl: 70.00,
-        unrealizedPnlPercent: 1.44,
-        timestamp: Date.now() - 900000,
-        confidence: 0.68,
-        status: 'active',
-        stopLoss: 0.4700,
-        takeProfit: 0.5100,
-        riskScore: 5.1
-      }
-    ];
-
-    setPositions(mockPositions);
-    setActivePositions(mockPositions.filter(p => p.status === 'active').length);
-    setTotalPnl(mockPositions.reduce((sum, p) => sum + p.unrealizedPnl, 0));
-  };
-
-  const updatePositions = () => {
-    setPositions(prev => prev.map(position => {
-      if (position.status !== 'active') return position;
-
-      // Simulate price movement
-      const priceChange = (Math.random() - 0.5) * position.currentPrice * 0.02;
-      const newPrice = Math.max(0.01, position.currentPrice + priceChange);
-      
-      // Calculate new PnL
-      const priceDiff = position.side === 'long' 
-        ? newPrice - position.entryPrice 
-        : position.entryPrice - newPrice;
-      const newPnl = priceDiff * position.quantity;
-      const newPnlPercent = (priceDiff / position.entryPrice) * 100;
-
-      // Update risk score based on PnL
-      const newRiskScore = Math.max(0, Math.min(10, 
-        position.riskScore + (Math.random() - 0.5) * 0.5
-      ));
-
-      return {
-        ...position,
-        currentPrice: newPrice,
-        unrealizedPnl: newPnl,
-        unrealizedPnlPercent: newPnlPercent,
-        riskScore: newRiskScore
-      };
-    }));
-
-    // Update totals
-    setPositions(current => {
-      const active = current.filter(p => p.status === 'active');
-      setActivePositions(active.length);
-      setTotalPnl(active.reduce((sum, p) => sum + p.unrealizedPnl, 0));
-      return current;
-    });
-  };
-
-  const updateAlerts = () => {
-    // Occasionally add new alerts
-    if (Math.random() > 0.7) {
-      const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'ADAUSDT'];
-      const types = ['entry', 'exit', 'stop_loss', 'take_profit'];
-      const severities = ['low', 'medium', 'high'];
-      const sides = ['long', 'short'];
-
-      const newAlert: SignalAlert = {
-        id: Date.now().toString(),
-        symbol: symbols[Math.floor(Math.random() * symbols.length)],
-        type: types[Math.floor(Math.random() * types.length)] as any,
-        message: `Signal alert for ${symbols[Math.floor(Math.random() * symbols.length)]}`,
-        timestamp: Date.now(),
-        severity: severities[Math.floor(Math.random() * severities.length)] as any,
-        price: Math.random() * 50000,
-        side: sides[Math.floor(Math.random() * sides.length)] as any
-      };
-
-      setAlerts(prev => [newAlert, ...prev].slice(0, 15)); // Keep last 15 alerts
-    }
-  };
-
-  const updatePnL = () => {
-    setTotalPnl(prev => prev + (Math.random() - 0.5) * 50);
-  };
 
   const getPnlColor = (pnl: number) => {
     if (pnl > 0) return 'text-green-400';
@@ -294,55 +155,72 @@ const RealTimeSignalPositions: React.FC = () => {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-gray-800 rounded-lg p-3 sm:p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs sm:text-sm text-gray-400">Total P&L</div>
-              <div className={`text-lg sm:text-xl font-bold ${getPnlColor(totalPnl)}`}>
-                ${totalPnl.toFixed(2)}
-              </div>
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-gray-800 rounded-lg p-3 sm:p-4 animate-pulse">
+              <div className="h-4 bg-slate-700 rounded w-24 mb-2"></div>
+              <div className="h-6 bg-slate-700 rounded w-16"></div>
             </div>
-            <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-green-400" />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="bg-gray-800 rounded-lg p-8 text-center">
+          <AlertCircle className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+          <p className="text-slate-400 text-sm mb-2">{error}</p>
+          <p className="text-slate-500 text-xs">Check backend connection or wait for positions to be opened</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-gray-800 rounded-lg p-3 sm:p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs sm:text-sm text-gray-400">Total P&L</div>
+                <div className={`text-lg sm:text-xl font-bold ${getPnlColor(totalPnl)}`}>
+                  ${totalPnl.toFixed(2)}
+                </div>
+              </div>
+              <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-green-400" />
+            </div>
+          </div>
+
+          <div className="bg-gray-800 rounded-lg p-3 sm:p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs sm:text-sm text-gray-400">Active Positions</div>
+                <div className="text-lg sm:text-xl font-bold text-blue-400">
+                  {activePositions}
+                </div>
+              </div>
+              <BarChart3 className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" />
+            </div>
+          </div>
+
+          <div className="bg-gray-800 rounded-lg p-3 sm:p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs sm:text-sm text-gray-400">Win Rate</div>
+                <div className="text-lg sm:text-xl font-bold text-green-400">
+                  {winRate !== null ? `${winRate.toFixed(1)}%` : '--'}
+                </div>
+              </div>
+              <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-green-400" />
+            </div>
+          </div>
+
+          <div className="bg-gray-800 rounded-lg p-3 sm:p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs sm:text-sm text-gray-400">Avg Risk Score</div>
+                <div className="text-lg sm:text-xl font-bold text-yellow-400">
+                  {avgRiskScore !== null ? avgRiskScore.toFixed(1) : '--'}
+                </div>
+              </div>
+              <AlertTriangle className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-400" />
+            </div>
           </div>
         </div>
-        
-        <div className="bg-gray-800 rounded-lg p-3 sm:p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs sm:text-sm text-gray-400">Active Positions</div>
-              <div className="text-lg sm:text-xl font-bold text-blue-400">
-                {activePositions}
-              </div>
-            </div>
-            <BarChart3 className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" />
-          </div>
-        </div>
-        
-        <div className="bg-gray-800 rounded-lg p-3 sm:p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs sm:text-sm text-gray-400">Win Rate</div>
-              <div className="text-lg sm:text-xl font-bold text-green-400">
-                73.5%
-              </div>
-            </div>
-            <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-green-400" />
-          </div>
-        </div>
-        
-        <div className="bg-gray-800 rounded-lg p-3 sm:p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs sm:text-sm text-gray-400">Avg Risk Score</div>
-              <div className="text-lg sm:text-xl font-bold text-yellow-400">
-                5.8
-              </div>
-            </div>
-            <AlertTriangle className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-400" />
-          </div>
-        </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6">
         {/* Positions List */}

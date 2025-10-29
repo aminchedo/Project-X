@@ -1,62 +1,71 @@
 import React, { useState, useEffect } from 'react';
-import { Brain, TrendingUp } from 'lucide-react';
+import { Brain, AlertCircle } from 'lucide-react';
+import { fetchFearGreedIndex, fetchSocialBuzz } from '../../services/liveDataApi';
 
 interface SentimentWidgetProps {
   selectedSymbol: string;
 }
 
 interface SentimentData {
-  score: number;
-  mood: string;
-  socialVolume: number;
-  newsSentiment: string;
+  indexValue: string | null;
+  classification: string | null;
+  socialVolume: number | null;
+  timestamp: string | null;
 }
 
-const MOCK_SENTIMENT: Record<string, SentimentData> = {
-  BTCUSDT: {
-    score: 7.2,
-    mood: 'Optimistic',
-    socialVolume: 18,
-    newsSentiment: 'Positive',
-  },
-  ETHUSDT: {
-    score: 6.8,
-    mood: 'Bullish',
-    socialVolume: 22,
-    newsSentiment: 'Very Positive',
-  },
-  BNBUSDT: {
-    score: 6.5,
-    mood: 'Neutral',
-    socialVolume: 12,
-    newsSentiment: 'Neutral',
-  },
-  DEFAULT: {
-    score: 6.0,
-    mood: 'Neutral',
-    socialVolume: 10,
-    newsSentiment: 'Neutral',
-  },
-};
-
 export const SentimentWidget: React.FC<SentimentWidgetProps> = ({ selectedSymbol }) => {
-  const [sentiment, setSentiment] = useState<SentimentData>(MOCK_SENTIMENT.DEFAULT);
+  const [sentiment, setSentiment] = useState<SentimentData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setIsLoading(true);
-    const timeout = setTimeout(() => {
-      const data = MOCK_SENTIMENT[selectedSymbol] || MOCK_SENTIMENT.DEFAULT;
-      setSentiment(data);
-      setLastUpdated(new Date());
-      setIsLoading(false);
-    }, 400);
+    const loadSentimentData = async () => {
+      setIsLoading(true);
+      setError(null);
 
-    return () => clearTimeout(timeout);
+      try {
+        // Fetch real Fear & Greed data
+        const fearGreedData = await fetchFearGreedIndex();
+
+        if (!fearGreedData || !fearGreedData.indexValue) {
+          setError('No sentiment data available');
+          setSentiment(null);
+          setIsLoading(false);
+          return;
+        }
+
+        // Fetch social buzz data for social volume
+        const socialData = await fetchSocialBuzz();
+        const topPostsCount = socialData.length;
+
+        setSentiment({
+          indexValue: fearGreedData.indexValue,
+          classification: fearGreedData.classification,
+          socialVolume: topPostsCount > 0 ? topPostsCount : null,
+          timestamp: fearGreedData.timestamp,
+        });
+        setLastUpdated(new Date());
+      } catch (err) {
+        console.error('Failed to load sentiment data:', err);
+        setError('Failed to load data');
+        setSentiment(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadSentimentData();
+
+    // Refresh every 5 minutes (sentiment data doesn't change that often)
+    const intervalId = setInterval(loadSentimentData, 5 * 60 * 1000);
+
+    return () => clearInterval(intervalId);
   }, [selectedSymbol]);
 
-  const scorePercentage = (sentiment.score / 10) * 100;
+  // Calculate percentage for progress bar if we have valid data
+  const indexValue = sentiment?.indexValue ? parseInt(sentiment.indexValue, 10) : 0;
+  const scorePercentage = indexValue;
 
   return (
     <div className="card">
@@ -66,21 +75,30 @@ export const SentimentWidget: React.FC<SentimentWidgetProps> = ({ selectedSymbol
             <Brain className="w-6 h-6" aria-hidden="true" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-white">Sentiment Score</h3>
+            <h3 className="text-lg font-semibold text-white">Market Sentiment</h3>
             <p className="text-xs text-slate-400">
-              {selectedSymbol.replace('USDT', '')} • Updated: {lastUpdated.toLocaleTimeString()}
+              Fear & Greed Index • Updated: {lastUpdated.toLocaleTimeString()}
             </p>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold text-pink-400">{sentiment.score.toFixed(1)}/10</div>
-          <div className="text-xs text-slate-400">{sentiment.mood}</div>
-        </div>
+        {sentiment && sentiment.indexValue && (
+          <div className="text-right">
+            <div className="text-2xl font-bold text-pink-400">{sentiment.indexValue}/100</div>
+            <div className="text-xs text-slate-400">{sentiment.classification || '--'}</div>
+          </div>
+        )}
       </div>
 
       {isLoading ? (
         <div className="widget-loading">
-          <div className="animate-pulse h-3 bg-slate-700/50 rounded-full"></div>
+          <div className="animate-pulse h-3 bg-slate-700/50 rounded-full mb-3"></div>
+          <div className="animate-pulse h-16 bg-slate-700/50 rounded-lg"></div>
+        </div>
+      ) : error || !sentiment ? (
+        <div className="text-center py-8">
+          <AlertCircle className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+          <p className="text-slate-400 text-sm">{error || 'No sentiment data available'}</p>
+          <p className="text-slate-500 text-xs mt-2">Check backend connection</p>
         </div>
       ) : (
         <>
@@ -89,20 +107,24 @@ export const SentimentWidget: React.FC<SentimentWidgetProps> = ({ selectedSymbol
               className="bg-gradient-to-r from-pink-400 to-pink-600 h-3 rounded-full shadow-lg transition-all duration-500"
               style={{ width: `${scorePercentage}%` }}
               role="progressbar"
-              aria-valuenow={sentiment.score}
+              aria-valuenow={indexValue}
               aria-valuemin={0}
-              aria-valuemax={10}
-              aria-label={`Sentiment score: ${sentiment.score} out of 10`}
+              aria-valuemax={100}
+              aria-label={`Sentiment score: ${indexValue} out of 100`}
             ></div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="text-center p-3 bg-slate-700/30 rounded-lg">
-              <div className="text-xs text-slate-400 mb-1">Social Volume</div>
-              <div className="text-lg font-semibold text-emerald-400">+{sentiment.socialVolume}%</div>
+              <div className="text-xs text-slate-400 mb-1">Social Posts</div>
+              <div className="text-lg font-semibold text-emerald-400">
+                {sentiment.socialVolume !== null ? sentiment.socialVolume : '--'}
+              </div>
             </div>
             <div className="text-center p-3 bg-slate-700/30 rounded-lg">
-              <div className="text-xs text-slate-400 mb-1">News Sentiment</div>
-              <div className="text-lg font-semibold text-emerald-400">{sentiment.newsSentiment}</div>
+              <div className="text-xs text-slate-400 mb-1">Classification</div>
+              <div className="text-lg font-semibold text-emerald-400">
+                {sentiment.classification || '--'}
+              </div>
             </div>
           </div>
         </>
