@@ -1,46 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  AlertTriangle, 
-  Shield, 
-  TrendingDown, 
+import {
+  AlertTriangle,
+  Shield,
+  TrendingDown,
   TrendingUp,
   Activity,
   Zap,
   DollarSign,
-  Percent,
-  Clock,
-  AlertCircle
+  AlertCircle as AlertCircleIcon
 } from 'lucide-react';
-
-interface RiskMetric {
-  name: string;
-  value: number;
-  threshold: number;
-  status: 'safe' | 'warning' | 'critical';
-  trend: 'up' | 'down' | 'stable';
-  unit: string;
-}
-
-interface PositionRisk {
-  symbol: string;
-  exposure: number;
-  var: number; // Value at Risk
-  leverage: number;
-  unrealizedPnl: number;
-  riskScore: number;
-}
-
-interface RiskAlert {
-  id: string;
-  timestamp: number;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  message: string;
-  symbol?: string;
-  metric: string;
-  value: number;
-  threshold: number;
-}
+import {
+  fetchRiskSnapshot,
+  RiskMetric,
+  PositionRisk,
+  RiskAlert
+} from '../services/liveDataApi';
 
 const RealTimeRiskMonitor: React.FC = () => {
   const [riskMetrics, setRiskMetrics] = useState<RiskMetric[]>([]);
@@ -50,201 +25,55 @@ const RealTimeRiskMonitor: React.FC = () => {
   const [portfolioVar, setPortfolioVar] = useState<number>(0);
   const [maxDrawdown, setMaxDrawdown] = useState<number>(0);
   const [sharpeRatio, setSharpeRatio] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Initialize with mock data - in real implementation, this would come from WebSocket
-    generateMockRiskData();
-    
-    // Real-time updates every 1 second for critical metrics
-    const riskInterval = setInterval(() => {
-      updateRiskMetrics();
-    }, 1000);
+    // Load real risk data
+    const loadRiskData = async () => {
+      setIsLoading(true);
+      setError(null);
 
-    // Position updates every 2 seconds
-    const positionInterval = setInterval(() => {
-      updatePositionRisks();
-    }, 2000);
+      try {
+        const data = await fetchRiskSnapshot();
 
-    // Alert updates every 5 seconds
-    const alertInterval = setInterval(() => {
-      updateRiskAlerts();
-    }, 5000);
-
-    return () => {
-      clearInterval(riskInterval);
-      clearInterval(positionInterval);
-      clearInterval(alertInterval);
+        if (!data) {
+          setError('No risk data available');
+          setRiskMetrics([]);
+          setPositionRisks([]);
+          setRiskAlerts([]);
+          setOverallRiskScore(0);
+          setPortfolioVar(0);
+          setMaxDrawdown(0);
+          setSharpeRatio(0);
+        } else {
+          setRiskMetrics(data.riskMetrics || []);
+          setPositionRisks(data.positionRisks || []);
+          setRiskAlerts(data.riskAlerts || []);
+          setOverallRiskScore(data.overallRiskScore || 0);
+          setPortfolioVar(data.portfolioVar || 0);
+          setMaxDrawdown(data.maxDrawdown || 0);
+          setSharpeRatio(data.sharpeRatio || 0);
+        }
+      } catch (err) {
+        console.error('Failed to load risk data:', err);
+        setError('Failed to load risk data');
+        setRiskMetrics([]);
+        setPositionRisks([]);
+        setRiskAlerts([]);
+      } finally {
+        setIsLoading(false);
+      }
     };
+
+    loadRiskData();
+
+    // Refresh every 30 seconds
+    const intervalId = setInterval(loadRiskData, 30000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
-  const generateMockRiskData = () => {
-    const metrics: RiskMetric[] = [
-      {
-        name: 'Portfolio VaR (1D)',
-        value: 2.3,
-        threshold: 5.0,
-        status: 'safe',
-        trend: 'stable',
-        unit: '%'
-      },
-      {
-        name: 'Max Leverage',
-        value: 3.2,
-        threshold: 5.0,
-        status: 'safe',
-        trend: 'down',
-        unit: 'x'
-      },
-      {
-        name: 'Correlation Risk',
-        value: 0.75,
-        threshold: 0.8,
-        status: 'warning',
-        trend: 'up',
-        unit: ''
-      },
-      {
-        name: 'Concentration Risk',
-        value: 25.4,
-        threshold: 30.0,
-        status: 'warning',
-        trend: 'stable',
-        unit: '%'
-      },
-      {
-        name: 'Liquidity Risk',
-        value: 12.1,
-        threshold: 20.0,
-        status: 'safe',
-        trend: 'down',
-        unit: '%'
-      },
-      {
-        name: 'Volatility Risk',
-        value: 18.7,
-        threshold: 25.0,
-        status: 'safe',
-        trend: 'up',
-        unit: '%'
-      }
-    ];
-
-    const positions: PositionRisk[] = [
-      {
-        symbol: 'BTCUSDT',
-        exposure: 45000,
-        var: 2100,
-        leverage: 2.5,
-        unrealizedPnl: 850,
-        riskScore: 6.2
-      },
-      {
-        symbol: 'ETHUSDT',
-        exposure: 28000,
-        var: 1680,
-        leverage: 3.1,
-        unrealizedPnl: -320,
-        riskScore: 7.8
-      },
-      {
-        symbol: 'SOLUSDT',
-        exposure: 15000,
-        var: 900,
-        leverage: 2.0,
-        unrealizedPnl: 240,
-        riskScore: 5.5
-      }
-    ];
-
-    const alerts: RiskAlert[] = [
-      {
-        id: '1',
-        timestamp: Date.now() - 300000,
-        severity: 'medium',
-        message: 'Correlation risk approaching threshold',
-        metric: 'Correlation Risk',
-        value: 0.75,
-        threshold: 0.8
-      },
-      {
-        id: '2',
-        timestamp: Date.now() - 600000,
-        severity: 'low',
-        message: 'Position concentration in BTCUSDT increased',
-        symbol: 'BTCUSDT',
-        metric: 'Concentration Risk',
-        value: 25.4,
-        threshold: 30.0
-      }
-    ];
-
-    setRiskMetrics(metrics);
-    setPositionRisks(positions);
-    setRiskAlerts(alerts);
-    setOverallRiskScore(6.8);
-    setPortfolioVar(4250);
-    setMaxDrawdown(8.5);
-    setSharpeRatio(1.85);
-  };
-
-  const updateRiskMetrics = () => {
-    setRiskMetrics(prev => prev.map(metric => {
-      const change = (Math.random() - 0.5) * 0.2;
-      const newValue = Math.max(0, metric.value + change);
-      
-      let status: 'safe' | 'warning' | 'critical' = 'safe';
-      if (newValue > metric.threshold * 0.9) status = 'critical';
-      else if (newValue > metric.threshold * 0.7) status = 'warning';
-      
-      let trend: 'up' | 'down' | 'stable' = 'stable';
-      if (change > 0.05) trend = 'up';
-      else if (change < -0.05) trend = 'down';
-
-      return {
-        ...metric,
-        value: newValue,
-        status,
-        trend
-      };
-    }));
-
-    // Update overall risk score
-    setOverallRiskScore(prev => {
-      const change = (Math.random() - 0.5) * 0.5;
-      return Math.max(0, Math.min(10, prev + change));
-    });
-
-    // Update portfolio metrics
-    setPortfolioVar(prev => prev + (Math.random() - 0.5) * 100);
-    setMaxDrawdown(prev => Math.max(0, prev + (Math.random() - 0.5) * 0.5));
-    setSharpeRatio(prev => Math.max(0, prev + (Math.random() - 0.5) * 0.1));
-  };
-
-  const updatePositionRisks = () => {
-    setPositionRisks(prev => prev.map(position => ({
-      ...position,
-      var: position.var + (Math.random() - 0.5) * 50,
-      unrealizedPnl: position.unrealizedPnl + (Math.random() - 0.5) * 100,
-      riskScore: Math.max(0, Math.min(10, position.riskScore + (Math.random() - 0.5) * 0.5))
-    })));
-  };
-
-  const updateRiskAlerts = () => {
-    // Occasionally add new alerts
-    if (Math.random() > 0.8) {
-      const newAlert: RiskAlert = {
-        id: Date.now().toString(),
-        timestamp: Date.now(),
-        severity: ['low', 'medium', 'high'][Math.floor(Math.random() * 3)] as any,
-        message: `Risk threshold alert for ${['BTCUSDT', 'ETHUSDT', 'SOLUSDT'][Math.floor(Math.random() * 3)]}`,
-        metric: 'Portfolio VaR',
-        value: Math.random() * 10,
-        threshold: 5.0
-      };
-      
-      setRiskAlerts(prev => [newAlert, ...prev].slice(0, 10)); // Keep only last 10 alerts
-    }
-  };
 
   const getRiskScoreColor = (score: number) => {
     if (score <= 3) return 'text-green-400';
@@ -288,6 +117,52 @@ const RealTimeRiskMonitor: React.FC = () => {
     }
   };
 
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-4 lg:space-y-6">
+        <div className="flex items-center space-x-3">
+          <Shield className="w-8 h-8 text-blue-400" />
+          <h2 className="text-2xl font-bold text-white">Risk Monitor</h2>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-gray-800 rounded-lg p-4 animate-pulse">
+              <div className="h-4 bg-slate-700 rounded w-24 mb-2"></div>
+              <div className="h-6 bg-slate-700 rounded w-16"></div>
+            </div>
+          ))}
+        </div>
+        <div className="text-center py-12 text-slate-400">
+          <Activity className="w-12 h-12 mx-auto mb-3 animate-pulse" />
+          <p>Loading risk data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="space-y-4 lg:space-y-6">
+        <div className="flex items-center space-x-3">
+          <Shield className="w-8 h-8 text-blue-400" />
+          <h2 className="text-2xl font-bold text-white">Risk Monitor</h2>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-12 text-center">
+          <AlertCircleIcon className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+          <p className="text-slate-400 text-lg mb-2">{error}</p>
+          <p className="text-slate-500 text-sm mb-4">
+            Risk monitoring requires backend API to calculate metrics
+          </p>
+          <p className="text-slate-500 text-xs">
+            Check backend connection or configure risk calculation endpoints
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 lg:space-y-6">
       {/* Header with Overall Risk Score - Responsive */}
@@ -297,60 +172,62 @@ const RealTimeRiskMonitor: React.FC = () => {
           <h2 className="text-xl sm:text-2xl font-bold text-white">Risk Monitor</h2>
           <div className="flex items-center space-x-2 text-xs sm:text-sm text-gray-400">
             <Activity className="w-3 h-3 sm:w-4 sm:h-4 animate-pulse" />
-            <span>Real-time</span>
+            <span>Live Data</span>
           </div>
         </div>
-        
+
         <div className="flex flex-wrap items-center gap-4 sm:gap-6">
           <div className="text-center">
             <div className="text-xs sm:text-sm text-gray-400">Overall Risk Score</div>
             <div className={`text-2xl sm:text-3xl font-bold ${getRiskScoreColor(overallRiskScore)}`}>
-              {overallRiskScore.toFixed(1)}/10
+              {overallRiskScore > 0 ? `${overallRiskScore.toFixed(1)}/10` : '--'}
             </div>
           </div>
           <div className="text-center">
             <div className="text-xs sm:text-sm text-gray-400">Portfolio VaR</div>
             <div className="text-lg sm:text-xl font-bold text-yellow-400">
-              ${portfolioVar.toFixed(0)}
+              {portfolioVar > 0 ? `$${portfolioVar.toFixed(0)}` : '--'}
             </div>
           </div>
           <div className="text-center">
             <div className="text-xs sm:text-sm text-gray-400">Max Drawdown</div>
             <div className="text-lg sm:text-xl font-bold text-red-400">
-              {maxDrawdown.toFixed(1)}%
+              {maxDrawdown > 0 ? `${maxDrawdown.toFixed(1)}%` : '--'}
             </div>
           </div>
-          
-          <div className="relative w-20 h-20">
-            <svg className="w-20 h-20 transform -rotate-90">
-              <circle
-                cx="40"
-                cy="40"
-                r="35"
-                stroke="currentColor"
-                strokeWidth="6"
-                fill="none"
-                className="text-gray-700"
-              />
-              <circle
-                cx="40"
-                cy="40"
-                r="35"
-                stroke="currentColor"
-                strokeWidth="6"
-                fill="none"
-                strokeDasharray={`${2 * Math.PI * 35}`}
-                strokeDashoffset={`${2 * Math.PI * 35 * (1 - overallRiskScore / 10)}`}
-                className={getRiskScoreColor(overallRiskScore)}
-                strokeLinecap="round"
-              />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className={`text-lg font-bold ${getRiskScoreColor(overallRiskScore)}`}>
-                {Math.round((overallRiskScore / 10) * 100)}%
-              </span>
+
+          {overallRiskScore > 0 && (
+            <div className="relative w-20 h-20">
+              <svg className="w-20 h-20 transform -rotate-90">
+                <circle
+                  cx="40"
+                  cy="40"
+                  r="35"
+                  stroke="currentColor"
+                  strokeWidth="6"
+                  fill="none"
+                  className="text-gray-700"
+                />
+                <circle
+                  cx="40"
+                  cy="40"
+                  r="35"
+                  stroke="currentColor"
+                  strokeWidth="6"
+                  fill="none"
+                  strokeDasharray={`${2 * Math.PI * 35}`}
+                  strokeDashoffset={`${2 * Math.PI * 35 * (1 - overallRiskScore / 10)}`}
+                  className={getRiskScoreColor(overallRiskScore)}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className={`text-lg font-bold ${getRiskScoreColor(overallRiskScore)}`}>
+                  {Math.round((overallRiskScore / 10) * 100)}%
+                </span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
