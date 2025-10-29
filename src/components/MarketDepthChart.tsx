@@ -71,32 +71,12 @@ const MarketDepthChart: React.FC<MarketDepthChartProps> = ({
         const response = await api.trading.getMarketDepth(symbol);
         setData(response);
       } else {
-        // Use mock data if API is not available
-        console.warn('API not available, using mock market depth data');
-        setData({
-          timestamp: new Date().toISOString(),
-          bids: Array.from({ length: 20 }, (_, i) => {
-            const amount = Math.random() * 100;
-            return {
-              price: 50000 - i * 10,
-              amount: amount,
-              total: (50000 - i * 10) * amount
-            };
-          }),
-          asks: Array.from({ length: 20 }, (_, i) => {
-            const amount = Math.random() * 100;
-            return {
-              price: 50000 + i * 10,
-              amount: amount,
-              total: (50000 + i * 10) * amount
-            };
-          }),
-          spread: 20,
-          mid_price: 50000
-        });
+        // API not available - set error instead of using fake data
+        throw new Error('Market depth API is not available');
       }
     } catch (err) {
       setError('Failed to load market depth');
+      setData(null);
       console.error('Market depth error:', err);
     } finally {
       setLoading(false);
